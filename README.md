@@ -15,11 +15,9 @@ For each entry the script does whichever of these applies:
                               and (with --out) write it back into a copy of the
                               .bib file.
 
-Why Crossref for the lookup? Its REST API returns structured JSON: separate
-given/family names, and BOTH the full journal name and its ISO abbreviation,
-which makes checking abbreviated authors and journal abbreviations reliable.
 
-##Usage:
+
+## Usage:
 To run the file on `references.bib`, run
 ```bash
 python check_bib.py references.bib --mailto you@example.org
@@ -30,7 +28,12 @@ python check_bib.py references.bib --mailto you@example.org --out fixed.bib
 ```
 missing DOIs are added (no additional changes are performed).
 
-##Dependencies:
+## Dependencies:
 ```bash
 pip install bibtexparser pylatexenc requests
 ```
+
+## Why Crossref for the lookup? 
+Its REST API returns structured JSON: separate
+given/family names, and BOTH the full journal name and its ISO abbreviation,
+which makes checking abbreviated authors and journal abbreviations reliable.
