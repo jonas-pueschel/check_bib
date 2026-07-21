@@ -23,6 +23,9 @@
 %   P5  Absil, Baker & Gallivan, "Trust-region methods on Riemannian
 %       manifolds", Found. Comput. Math. 7(3):303-330, 2007.
 %       doi:10.1007/s10208-005-0179-9
+%   P6  Absil, Mahony & Sepulchre, "Optimization Algorithms on Matrix
+%       Manifolds" (book), Princeton Univ. Press, 2008.
+%       doi:10.1515/9781400830244
 % ============================================================================
 
 
@@ -212,4 +215,36 @@
   title  = {Hermite interpolation with retractions on manifolds},
   url    = {https://arxiv.org/abs/2212.12259},
   year   = {2022},
+}
+
+% ---------------------------------------------------------------------------
+% INCOMPLETE ENTRIES -- these resolve online fine, but are missing a field
+% that BibTeX requires for their entry TYPE. The structural check reports the
+% gap (as an indented "* incomplete @<type>: missing required field(s): ..."
+% note) independently of the online lookup. Which field is required depends on
+% the type -- that's the point of these two.
+% ---------------------------------------------------------------------------
+
+% [14] INCOMPLETE @article -- missing the required "journal" field. The DOI
+%      resolves and every present field matches, so the only finding is the
+%      structural note: an @article must have author, title, journal, year.
+@article{Vandereycken2013NoJournal,
+  author = {Vandereycken, B.},
+  title  = {Low-rank matrix completion by {Riemannian} optimization},
+  year   = {2013},
+  volume = {23},
+  number = {2},
+  pages  = {1214--1236},
+  doi    = {10.1137/110845768},
+}
+
+% [15] INCOMPLETE @book -- missing the required "publisher" field. A book has
+%      DIFFERENT requirements than an article: (author OR editor), title,
+%      publisher, year. The publisher (Princeton University Press) is omitted,
+%      so the structural check flags it -- demonstrating the type-dependence.
+@book{AbsilMahonySepulchre2008,
+  author = {Absil, P.-A. and Mahony, R. and Sepulchre, R.},
+  title  = {Optimization Algorithms on Matrix Manifolds},
+  year   = {2008},
+  doi    = {10.1515/9781400830244},
 }
