@@ -1,68 +1,184 @@
-% ok
-@article{APS22,
-  author  = {Altmann, R. and Peterseim, D. and Stykel, T.},
-  title   = {Energy-adaptive {R}iemannian optimization on the {S}tiefel manifold},
-  journal = {ESAIM Math. Model. Numer. Anal.},
-  year    = {2022},
-  volume  = {56},
-  number  = {5},
-  pages   = {1629--1653},
-  doi     = {10.1051/m2an/2022036},
-  url     = {https://doi.org/10.1051/m2an/2022036},
-}
+% ============================================================================
+% example_references.bib
+%
+% A test file for check_bib.py. Every entry uses a REAL paper with a REAL DOI
+% (or arXiv id), so the online lookups actually succeed. The correct entries
+% should pass; each "wrong" entry contains exactly ONE deliberately injected
+% error so you can see which message the checker produces for it.
+%
+% Run:   python check_bib.py example_references.bib --mailto you@example.org
+% Add    --out fixed.bib   to write the discovered DOI for entry [11] back.
+%
+% The five underlying papers (all correct, for reference):
+%   P1  Séguin & Kressner, "Hermite interpolation with retractions on
+%       manifolds", BIT Numer. Math. 64(4):42, 2024.
+%       doi:10.1007/s10543-024-01023-y   (arXiv:2212.12259)
+%   P2  Séguin & Kressner, "Continuation methods for Riemannian optimization",
+%       SIAM J. Optim. 32(2):1069-1093, 2022.   doi:10.1137/21M1428650
+%   P3  Vandereycken, "Low-rank matrix completion by Riemannian optimization",
+%       SIAM J. Optim. 23(2):1214-1236, 2013.   doi:10.1137/110845768
+%   P4  Ring & Wirth, "Optimization methods on Riemannian manifolds and their
+%       application to shape space", SIAM J. Optim. 22(2):596-627, 2012.
+%       doi:10.1137/11082885X
+%   P5  Absil, Baker & Gallivan, "Trust-region methods on Riemannian
+%       manifolds", Found. Comput. Math. 7(3):303-330, 2007.
+%       doi:10.1007/s10208-005-0179-9
+% ============================================================================
 
-% missing Stykel, T. as author
-@article{APS24,
-  author  = {Altmann, R. and Peterseim, D.},
-  title   = {{R}iemannian {N}ewton methods for energy minimization problems of {K}ohn--{S}ham type},
-  journal = {J. Sci. Comput.},
+
+% ---------------------------------------------------------------------------
+% CORRECT ENTRIES -- these should all report OK.
+% ---------------------------------------------------------------------------
+
+% [1] CORRECT. Tests journal-abbreviation matching ("BIT Numer. Math." vs the
+%     full "BIT Numerical Mathematics") and abbreviated author initials
+%     ("A." matches "Axel", "D." matches "Daniel"). Expected: OK.
+@article{Seguin2024Hermite,
+  author  = {S\'eguin, A. and Kressner, D.},
+  title   = {Hermite interpolation with retractions on manifolds},
+  journal = {BIT Numer. Math.},
   year    = {2024},
-  volume  = {101},
-  pages   = {article 6},
-  doi     = {10.1007/s10915-024-02612-3},
-  url     = {https://doi.org/10.1007/s10915-024-02612-3},
+  volume  = {64},
+  number  = {4},
+  eid     = {42},
+  doi     = {10.1007/s10543-024-01023-y},
 }
 
-% not (yet) published arXiv preprint without doi
-@article{PPS25,
-    title={Energy-Adaptive {R}iemannian Conjugate Gradient Method for Density Functional Theory}, 
-    author={Peterseim, D. and Püschel, J. and Stykel, T.},
-    year={2025},
-    journal={ArXiv e-print 2503.16225 [math.NA]},
-    %doi = "10.48550/arXiv.2503.16225"
+% [2] CORRECT. A different journal abbreviation ("SIAM J. Optim.") and a page
+%     range instead of an article number. Expected: OK.
+@article{Seguin2022Continuation,
+  author  = {S\'eguin, A. and Kressner, D.},
+  title   = {Continuation methods for {Riemannian} optimization},
+  journal = {SIAM J. Optim.},
+  year    = {2022},
+  volume  = {32},
+  number  = {2},
+  pages   = {1069--1093},
+  doi     = {10.1137/21M1428650},
 }
 
-
-%published arXiv preprint 
-@article{AHPS24,
-  shorthand = {PS3},
-  author    = {Altmann, R. and Hermann, M. and Peterseim, D. and Stykel, T.},
-  title     = {Riemannian optimisation methods for ground states of multicomponent {B}ose--{E}instein condensates},
-  journal   = {ArXiv e-preprint 2411.09617 [math.NA]},
-  year      = {2024},
-  url       = {https://arxiv.org/abs/2411.09617},
-  doi       = {10.48550/arXiv.2411.09617},
-}
-
-%wrong journal J. Sci. Comput. -> IMA J. Numer. Anal.
-@article{AHPS25,
-  author  = {Altmann, R. and Hermann, M. and Peterseim, D. and Stykel, T.},
-  title   = {Riemannian optimization methods for ground states of multicomponent {B}ose--{E}instein condensates},
-  journal = {J. Sci. Comput.},
-  year    = {2025},
-  doi     = {10.1093/imanum/draf046},
-  url     = {https://doi.org/10.1093/imanum/draf046},
-}
-
-%wrong DOI
-@article{HP20,
-  author  = {Henning, P. and Peterseim, D.},
-  title   = {Sobolev gradient flow for the {G}ross--{P}itaevskii eigenvalue problem: global convergence and computational efficiency},
-  journal = {SIAM J. Numer. Anal.},
-  volume  = {58},
+% [3] CORRECT. Three authors with full given-name initials, and the
+%     "Found. Comput. Math." abbreviation. Expected: OK.
+@article{Absil2007TrustRegion,
+  author  = {Absil, P.-A. and Baker, C. G. and Gallivan, K. A.},
+  title   = {Trust-region methods on {Riemannian} manifolds},
+  journal = {Found. Comput. Math.},
+  year    = {2007},
+  volume  = {7},
   number  = {3},
-  pages   = {1744--1772},
-  year    = {2020},
-  doi     = {10.1137/18M1230463},
-  url     = {https://doi.org/10.1137/18M1230463},
+  pages   = {303--330},
+  doi     = {10.1007/s10208-005-0179-9},
+}
+
+
+% ---------------------------------------------------------------------------
+% WRONG ENTRIES -- each has ONE injected error the checker should catch.
+% ---------------------------------------------------------------------------
+
+% [4] arXiv PREPRINT THAT HAS SINCE BEEN PUBLISHED. Cited only as an arXiv
+%     preprint (DOI 10.48550/arXiv...). The checker matches it against the
+%     arXiv record, then reports that it now appears in BIT Numer. Math.
+%     (10.1007/s10543-024-01023-y) and lists it under "consider updating",
+%     flagging the year/DOI difference vs the published version.
+@article{Seguin2022HermitePreprint,
+  author  = {S\'eguin, A. and Kressner, D.},
+  title   = {Hermite interpolation with retractions on manifolds},
+  year    = {2022},
+  doi     = {10.48550/arXiv.2212.12259},
+}
+
+% [5] TYPO IN TITLE -- "manifolds" is misspelled "manifholds". The DOI is
+%     correct, so the lookup succeeds and the title mismatch is reported.
+@article{RingWirth2012Typo,
+  author  = {Ring, W. and Wirth, B.},
+  title   = {Optimization methods on {Riemannian} manifholds and their application to shape space},
+  journal = {SIAM J. Optim.},
+  year    = {2012},
+  volume  = {22},
+  number  = {2},
+  pages   = {596--627},
+  doi     = {10.1137/11082885X},
+}
+
+% [6] MISSING ONE AUTHOR -- Gallivan is dropped from this three-author paper.
+%     The DOI is correct; the checker reports an author-count mismatch.
+@article{Absil2007MissingAuthor,
+  author  = {Absil, P.-A. and Baker, C. G.},
+  title   = {Trust-region methods on {Riemannian} manifolds},
+  journal = {Found. Comput. Math.},
+  year    = {2007},
+  volume  = {7},
+  number  = {3},
+  pages   = {303--330},
+  doi     = {10.1007/s10208-005-0179-9},
+}
+
+% [7] WRONG VOLUME -- the real volume is 32; here it is 31. Everything else is
+%     correct, so only the volume is flagged.
+@article{Seguin2022WrongVolume,
+  author  = {S\'eguin, A. and Kressner, D.},
+  title   = {Continuation methods for {Riemannian} optimization},
+  journal = {SIAM J. Optim.},
+  year    = {2022},
+  volume  = {31},
+  number  = {2},
+  pages   = {1069--1093},
+  doi     = {10.1137/21M1428650},
+}
+
+% [8] WRONG YEAR -- published in 2013; here it is 2014. Only the year is
+%     flagged.
+@article{Vandereycken2013WrongYear,
+  author  = {Vandereycken, B.},
+  title   = {Low-rank matrix completion by {Riemannian} optimization},
+  journal = {SIAM J. Optim.},
+  year    = {2014},
+  volume  = {23},
+  number  = {2},
+  pages   = {1214--1236},
+  doi     = {10.1137/110845768},
+}
+
+% [9] WRONG JOURNAL -- this paper is in SIAM J. Optim., but is labelled here
+%     as SIAM J. Numer. Anal. This is a real mismatch, not just an
+%     abbreviation difference, so the abbreviation logic does NOT hide it.
+%     (Same paper as [8]; here only the journal is wrong.)
+@article{Vandereycken2013WrongJournal,
+  author  = {Vandereycken, B.},
+  title   = {Low-rank matrix completion by {Riemannian} optimization},
+  journal = {SIAM J. Numer. Anal.},
+  year    = {2013},
+  volume  = {23},
+  number  = {2},
+  pages   = {1214--1236},
+  doi     = {10.1137/110845768},
+}
+
+% [10] WRONG AUTHOR SURNAME -- "Kressner" is misspelled "Kessner". The DOI is
+%      correct; the checker reports an author family-name mismatch (this is a
+%      surname error, distinct from the initials-only check).
+@article{Seguin2024WrongName,
+  author  = {S\'eguin, A. and Kessner, D.},
+  title   = {Hermite interpolation with retractions on manifolds},
+  journal = {BIT Numer. Math.},
+  year    = {2024},
+  volume  = {64},
+  number  = {4},
+  eid     = {42},
+  doi     = {10.1007/s10543-024-01023-y},
+}
+
+% [11] MISSING DOI, but recoverable. There is no doi field at all, yet the
+%      title and authors are correct, so the checker should find the DOI on
+%      Crossref (10.1137/11082885X). With --out it is written back into a
+%      copy of this file. (Same paper as [5], but here spelled correctly and
+%      with the DOI removed.)
+@article{RingWirth2012NoDOI,
+  author  = {Ring, W. and Wirth, B.},
+  title   = {Optimization methods on {Riemannian} manifolds and their application to shape space},
+  journal = {SIAM J. Optim.},
+  year    = {2012},
+  volume  = {22},
+  number  = {2},
+  pages   = {596--627},
 }

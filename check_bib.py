@@ -65,7 +65,8 @@ class Reference:
     title: str = ""
     authors: list[tuple[str, str]] = field(default_factory=list)  # (family, given)
     journal: str = ""
-    year: str = ""
+    year: str = ""                   # preferred/displayed year (print if available)
+    year_candidates: list[str] = field(default_factory=list)  # all plausible years
     volume: str = ""
     number: str = ""
     pages: str = ""
@@ -192,12 +193,23 @@ def crossref_to_reference(msg: dict) -> Reference:
     def first(lst):
         return lst[0] if isinstance(lst, list) and lst else ""
 
+    # A work published online in one year but assigned to a print volume in the
+    # next is common. Citations (and .bib files) almost always use the PRINT /
+    # volume year, so prefer published-print for the displayed year. But keep
+    # every date Crossref reports as an acceptable match, because some databases
+    # do cite the online year -- that ambiguity shouldn't be flagged as an error.
+    # (Deliberately ignore `created`/`deposited`/`indexed`: those are metadata
+    # registration dates, not publication dates.)
     year = ""
-    for datekey in ("published", "published-print", "published-online", "issued"):
+    year_candidates = []
+    for datekey in ("published-print", "published-online", "issued", "published"):
         dp = msg.get(datekey, {}).get("date-parts", [[]])
-        if dp and dp[0]:
-            year = str(dp[0][0])
-            break
+        if dp and dp[0] and dp[0][0]:
+            y = str(dp[0][0])
+            if not year:
+                year = y                 # first in preference order = displayed
+            if y not in year_candidates:
+                year_candidates.append(y)
 
     return Reference(
         title=clean_latex(first(msg.get("title", []))),
@@ -205,6 +217,7 @@ def crossref_to_reference(msg: dict) -> Reference:
         journal=first(msg.get("container-title", [])),
         journal_alt=first(msg.get("short-container-title", [])),
         year=year,
+        year_candidates=year_candidates,
         volume=str(msg.get("volume", "")).strip(),
         number=str(msg.get("issue", "")).strip(),
         pages=str(msg.get("page", "")).strip(),
@@ -335,7 +348,9 @@ def parse_arxiv_atom(xml_text: str):
         title=clean_latex(re.sub(r"\s+", " ", title_el.text)),
         authors=authors,
         year=year,
-        doi=(doi_el.text or "").strip() if doi_el is not None else "",
+        # NB: deliberately leave ref.doi empty. The published DOI (if any) is
+        # kept in `published_doi` and handled in the publication-status check,
+        # so the primary title/author comparison doesn't false-flag the DOI.
     )
     return ArxivRecord(
         reference=ref,
@@ -371,7 +386,7 @@ def authors_match(local, ref):
     return problems
 
 
-_JOURNAL_STOPWORDS = {"of", "on", "and", "the", "for", "in", "a", "an", "de", "der", "&"}
+_JOURNAL_STOPWORDS = {"of", "on", "and", "the", "for", "in", "a", "an", "de", "der"}
 
 
 def abbrev_compatible(abbrev, full):
@@ -405,8 +420,13 @@ def compare(local, ref, check_year=True):
         shown = ref.journal + (f" / {ref.journal_alt}" if ref.journal_alt else "")
         problems.append(f"journal: bib='{local.journal}' vs source='{shown}'")
 
-    if check_year and local.year and ref.year and local.year != ref.year:
-        problems.append(f"year: bib='{local.year}' vs source='{ref.year}'")
+    if check_year and local.year and ref.year:
+        acceptable = ref.year_candidates or [ref.year]
+        if local.year not in acceptable:
+            extra = ""
+            if len(acceptable) > 1:
+                extra = f" (Crossref dates: {', '.join(acceptable)})"
+            problems.append(f"year: bib='{local.year}' vs source='{ref.year}'{extra}")
 
     if local.volume and ref.volume and norm(local.volume) != norm(ref.volume):
         problems.append(f"volume: bib='{local.volume}' vs source='{ref.volume}'")
