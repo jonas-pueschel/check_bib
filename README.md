@@ -38,6 +38,10 @@ python check_bib.py references.bib --mailto you@example.org --out fixed.bib
 ```
 missing DOIs are added (no additional changes are performed).
 
+## Caveats
+The comparison has two caveats:
+1. Authors are currently only compared with lastname and the initial of the first name: `P\"uschel, Johannes` instead of `P\"uschel, Jonas` would hence not be caught (`Puschel, Jonas` however would). Also, middle names are truncated in the comparison.
+2. There are no consistency checks between entries, i.e. if all entries use full or abbreviated journal titles or if all entries use the same author format. 
 
 ## Why Crossref for the lookup? 
 Its REST API returns structured JSON: separate
