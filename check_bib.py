@@ -436,12 +436,77 @@ def journal_match(local, ref):
     return False
 
 
-def compare(local, ref, check_year=True):
+def issue_match(a: str, b: str) -> bool:
+    """True if two issue designations agree, tolerating combined issues.
+    Old journals often bundle issues (e.g. "7-8"), while a .bib may cite just
+    one part ("7"). After normalisation "7-8" becomes "7 8", so we accept a
+    single-number issue that is one component of the other side."""
+    na, nb = norm(a), norm(b)
+    if na == nb:
+        return True
+    return na in nb.split() or nb in na.split()
+
+
+# Minimum fields for a citation to be structurally complete, per BibTeX entry
+# type. A tuple means "at least one of these must be present" (e.g. a book
+# needs an author OR an editor). This is the classic BibTeX requirement set.
+REQUIRED_FIELDS = {
+    "article":       ["author", "title", "journal", "year"],
+    "book":          [("author", "editor"), "title", "publisher", "year"],
+    "booklet":       ["title"],
+    "inbook":        [("author", "editor"), "title", ("chapter", "pages"),
+                      "publisher", "year"],
+    "incollection":  ["author", "title", "booktitle", "publisher", "year"],
+    "inproceedings": ["author", "title", "booktitle", "year"],
+    "conference":    ["author", "title", "booktitle", "year"],
+    "proceedings":   ["title", "year"],
+    "manual":        ["title"],
+    "mastersthesis": ["author", "title", "school", "year"],
+    "phdthesis":     ["author", "title", "school", "year"],
+    "techreport":    ["author", "title", "institution", "year"],
+    "unpublished":   ["author", "title", "note"],
+    "misc":          [],
+}
+
+
+def missing_required_fields(local):
+    """Required fields (per BibTeX entry type) that are absent OR present but
+    empty. Handles alternatives like (author, editor). Returns [] for unknown
+    types rather than guessing. A field like `number={}` counts as missing."""
+    spec = REQUIRED_FIELDS.get(local.entrytype)
+    if spec is None:
+        return []
+
+    def present(f):
+        return bool(local.raw.get(f, "").strip())
+
+    missing = []
+    for req in spec:
+        if isinstance(req, tuple):
+            if not any(present(f) for f in req):
+                missing.append(" or ".join(req))
+        elif not present(req):
+            missing.append(req)
+    return missing
+
+
+def compare(local, ref, check_year=True, suggest=False):
     """Full field comparison. Returns list of mismatch descriptions."""
     problems = authors_match(local.authors, ref.authors)
 
-    if local.title and ref.title and norm(local.title) != norm(ref.title):
-        problems.append(f"title: bib='{local.title}' vs source='{ref.title}'")
+    if local.title and ref.title:
+        # Old Crossref records sometimes store U+FFFD (the Unicode replacement
+        # character) where a non-ASCII letter was lost on ingest -- e.g. an
+        # umlaut in a German title. That character is irrecoverable, so exact
+        # comparison would wrongly flag a correct entry. When it's present in
+        # the source, fall back to a similarity check; only relaxing here keeps
+        # exact matching (and typo detection) intact for clean records.
+        if "\ufffd" in ref.title or "\ufffd" in local.title:
+            if title_score(local.title, ref.title) < 0.90:
+                problems.append(f"title: bib='{local.title}' vs source='{ref.title}' "
+                                f"(source metadata contains corrupted characters)")
+        elif norm(local.title) != norm(ref.title):
+            problems.append(f"title: bib='{local.title}' vs source='{ref.title}'")
 
     if not journal_match(local.journal, ref):
         shown = ref.journal + (f" / {ref.journal_alt}" if ref.journal_alt else "")
@@ -458,7 +523,7 @@ def compare(local, ref, check_year=True):
     if local.volume and ref.volume and norm(local.volume) != norm(ref.volume):
         problems.append(f"volume: bib='{local.volume}' vs source='{ref.volume}'")
 
-    if local.number and ref.number and norm(local.number) != norm(ref.number):
+    if local.number and ref.number and not issue_match(local.number, ref.number):
         problems.append(f"number/issue: bib='{local.number}' vs source='{ref.number}'")
 
     if local.pages and ref.pages and norm(local.pages) != norm(ref.pages):
@@ -472,6 +537,18 @@ def compare(local, ref, check_year=True):
 
     if local.doi and ref.doi and local.doi.lower() != ref.doi.lower():
         problems.append(f"DOI: bib='{local.doi}' vs source='{ref.doi}'")
+
+    if suggest:
+        # Optional citation fields the source has but the entry omits. These are
+        # suggestions, not errors (many styles legitimately drop the issue),
+        # and are distinct from the required-field check done structurally.
+        local_pages = local.pages or local.article_number
+        ref_pages = ref.pages or ref.article_number
+        for label, lv, rv in (("volume", local.volume, ref.volume),
+                              ("number/issue", local.number, ref.number),
+                              ("pages", local_pages, ref_pages)):
+            if rv and not lv:
+                problems.append(f"missing '{label}': source has '{rv}'")
 
     return problems
 
@@ -517,7 +594,7 @@ def handle_normal_doi(local, args, session):
     if ref is None:
         print(f"[{local.key}] SKIPPED -- DOI '{local.doi}' not found on Crossref")
         return "skipped", []
-    report(local.key, compare(local, ref))
+    report(local.key, compare(local, ref, suggest=args.suggest))
     return "checked", []
 
 
@@ -538,7 +615,7 @@ def handle_arxiv(local, args, session, arxiv_id):
         extras.append(("doi", local.key, adoi))
 
     # arXiv preprints predate publication, so don't flag the year.
-    problems = compare(local, rec.reference, check_year=False)
+    problems = compare(local, rec.reference, check_year=False, suggest=args.suggest)
     report(local.key, problems, ok_msg=f"OK (matches arXiv:{arxiv_id})")
 
     # --- publication status -------------------------------------------------
@@ -568,7 +645,7 @@ def handle_arxiv(local, args, session, arxiv_id):
             pub_ref = fetch_crossref(pub_doi, mailto=args.mailto, session=session)
             time.sleep(args.delay)
             if pub_ref:
-                pubs = compare(local, pub_ref)
+                pubs = compare(local, pub_ref, suggest=args.suggest)
                 if pubs:
                     print(f"    * vs published version ({pub_doi}):")
                     for p in pubs:
@@ -594,7 +671,7 @@ def handle_missing_doi(local, args, session):
     if best and score >= TITLE_ACCEPT and author_family_overlap(local, best):
         print(f"[{local.key}] no DOI in entry -> found {best.doi} "
               f"[title match {score:.2f}]")
-        report(local.key, compare(local, best),
+        report(local.key, compare(local, best, suggest=args.suggest),
                ok_msg="fields otherwise match the found record")
         return "found", [("doi", local.key, best.doi)]
 
@@ -617,6 +694,9 @@ def main(argv=None):
                     help="seconds between lookups (default 0.5)")
     ap.add_argument("--out", metavar="FILE",
                     help="write a copy of the .bib with discovered DOIs added")
+    ap.add_argument("--suggest", action="store_true",
+                    help="also suggest optional fields (volume/issue/pages) the "
+                         "online record has but the entry omits")
     args = ap.parse_args(argv)
 
     refs = parse_bib(args.bibfile)
@@ -635,6 +715,14 @@ def main(argv=None):
             status, extras = handle_normal_doi(local, args, session)
         else:
             status, extras = handle_missing_doi(local, args, session)
+
+        # Structural completeness: required fields for this entry type. This is
+        # independent of the online lookup, so it runs (and reports) even when
+        # the entry was skipped.
+        miss = missing_required_fields(local)
+        if miss:
+            print(f"    * incomplete @{local.entrytype}: missing required "
+                  f"field(s): {', '.join(miss)}")
 
         counts[status] = counts.get(status, 0) + 1
         for extra in extras:
