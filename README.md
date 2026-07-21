@@ -40,7 +40,7 @@ missing DOIs are added (no additional changes are performed).
 
 ## Caveats
 The comparison has two caveats:
-1. Authors are currently only compared with lastname and the initial of the first name: `P\"uschel, Johannes` instead of `P\"uschel, Jonas` would hence not be caught (`Puschel, Jonas` however would). Also, middle names are truncated in the comparison.
+1. Authors are currently only compared with lastname and the initial of the first name: `P\"uschel, Johannes` instead of `P\"uschel, Jonas` would hence not be caught (`Püschl, Jonas` however would). Also, middle names are truncated in the comparison.
 2. The `year` field is truly disambiguous. Crossref gives different dates for `published`, `published-online`, `published-print` and `issued`. The script accepts every year that apperas in either of those fields.
 3. There are no consistency checks between entries, i.e. if all entries use full or abbreviated journal titles or if all entries use the same author format. 
 
