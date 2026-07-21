@@ -30,17 +30,16 @@ pip install bibtexparser pylatexenc requests
 ## Usage:
 To run the file on `references.bib`, run
 ```bash
-python check_bib.py references.bib --mailto you@example.org
+python check_bib.py references.bib 
 ```
-The `--mailto` is optional; it just puts you in Crossref's faster "polite" pool. The passed files does not get changed. If an out file is passed via
-```bash
-python check_bib.py references.bib --mailto you@example.org --out fixed.bib
-```
-missing DOIs are added (no additional changes are performed).
+It has the following (optional) command line parameters
+* `--mailto you@example.org` puts you in Crossref's faster "polite" pool. The passed files does not get changed. 
+* `--out fixed.bib` creates an output file, where missing DOIs are added (other missing fields are not yet added).
+* `--suggest` flags missing non-essential fields (refer to the `REQUIRED_FIELDS` variable), that occur in the reference but not the `.bib` file.
 
 ## Caveats
 The comparison has two caveats:
-1. Authors are currently only compared with lastname and the initial of the first name: `P\"uschel, Johannes` instead of `P\"uschel, Jonas` would hence not be caught (`Püschl, Jonas` however would). Also, middle names are truncated in the comparison.
+1. Authors are currently only compared with lastname and the initial of the first name: `P\"uschel, Johannes` instead of `P\"uschel, Jonas` would hence not be caught (`Püschl, Jonas` however would). Umlaute and other special characters are normalized (e.g. `ü -> u`) in the comparison. Also, middle names are truncated in the comparison.
 2. The `year` field is truly disambiguous. Crossref gives different dates for `published`, `published-online`, `published-print` and `issued`. The script accepts every year that apperas in either of those fields.
 3. There are no consistency checks between entries, i.e. if all entries use full or abbreviated journal titles or if all entries use the same author format. 
 
