@@ -33,9 +33,9 @@ To run the file on `references.bib`, run
 python check_bib.py references.bib 
 ```
 It has the following (optional) command line parameters
-* `--mailto you@example.org` puts you in Crossref's faster "polite" pool. The passed files does not get changed. 
+* `--mailto you@example.org` puts you in Crossref's faster "polite" pool. The passed files does not get changed (recommended). 
 * `--out fixed.bib` creates an output file, where missing DOIs are added (other missing fields are not yet added).
-* `--suggest` flags missing non-essential fields (refer to the `REQUIRED_FIELDS` variable), that occur in the reference but not the `.bib` file.
+* `--suggest` flags missing non-essential fields (refer to the `REQUIRED_FIELDS` variable), that occur in the reference but not the `.bib` file (recommended).
 
 ## Caveats
 The comparison has two caveats:
