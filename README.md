@@ -16,6 +16,16 @@ For each entry the script does whichever of these applies:
                               .bib file.
 
 
+## Dependencies:
+The dependencies need to be installed before the script can be run. Optionally, one can first initialize a python virtual enviroment
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+```
+The dependencies are installed via
+```bash
+pip install bibtexparser pylatexenc requests
+```
 
 ## Usage:
 To run the file on `references.bib`, run
@@ -28,10 +38,6 @@ python check_bib.py references.bib --mailto you@example.org --out fixed.bib
 ```
 missing DOIs are added (no additional changes are performed).
 
-## Dependencies:
-```bash
-pip install bibtexparser pylatexenc requests
-```
 
 ## Why Crossref for the lookup? 
 Its REST API returns structured JSON: separate
