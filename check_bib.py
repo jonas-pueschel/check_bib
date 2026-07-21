@@ -304,6 +304,33 @@ def extract_arxiv_id(*fields) -> str | None:
     return None
 
 
+def arxiv_doi_from_id(arxiv_id: str) -> str:
+    """Registered arXiv DOI for an id:
+    '2201.12345' -> '10.48550/arXiv.2201.12345'."""
+    return f"10.48550/arXiv.{arxiv_id}"
+
+
+def detect_arxiv_id(local) -> str | None:
+    """Find an arXiv id for an entry even when it has no `doi` field. Checks,
+    in order: an arXiv DOI, the `eprint` field, and any field that *mentions*
+    arXiv (`url`, `journal`, `note`, `howpublished`) -- e.g. a URL like
+    'https://arxiv.org/abs/2201.12345' or a journal like
+    'arXiv preprint arXiv:2201.12345'. The "arxiv" guard on the free-text
+    fields avoids mistaking an unrelated number (a volume, a year) for an id."""
+    if is_arxiv_doi(local.doi):
+        return extract_arxiv_id(local.doi)
+    eid = extract_arxiv_id(local.raw.get("eprint", ""))
+    if eid:
+        return eid
+    for fld in ("url", "journal", "note", "howpublished"):
+        val = local.raw.get(fld, "")
+        if val and "arxiv" in val.lower():
+            aid = extract_arxiv_id(val)
+            if aid:
+                return aid
+    return None
+
+
 def fetch_arxiv(arxiv_id, session=None):
     sess = session or requests.Session()
     try:
@@ -489,23 +516,26 @@ def handle_normal_doi(local, args, session):
     time.sleep(args.delay)
     if ref is None:
         print(f"[{local.key}] SKIPPED -- DOI '{local.doi}' not found on Crossref")
-        return "skipped", None
+        return "skipped", []
     report(local.key, compare(local, ref))
-    return "checked", None
+    return "checked", []
 
 
-def handle_arxiv(local, args, session):
-    arxiv_id = extract_arxiv_id(local.doi, local.raw.get("eprint", ""),
-                                local.raw.get("url", ""))
-    if not arxiv_id:
-        print(f"[{local.key}] SKIPPED -- looks like arXiv but no id could be parsed")
-        return "skipped", None
-
+def handle_arxiv(local, args, session, arxiv_id):
+    extras = []
     rec = fetch_arxiv(arxiv_id, session=session)
     time.sleep(max(args.delay, 3.0))          # arXiv asks for ~3s between calls
     if rec is None:
         print(f"[{local.key}] SKIPPED -- arXiv:{arxiv_id} not found")
-        return "skipped", None
+        return "skipped", extras
+
+    # If the entry carried no DOI, construct the registered arXiv DOI so it can
+    # be reported and (with --out) written back into the .bib.
+    if not local.doi:
+        adoi = arxiv_doi_from_id(arxiv_id)
+        print(f"[{local.key}] no DOI in entry -> arXiv preprint {arxiv_id} "
+              f"(DOI {adoi})")
+        extras.append(("doi", local.key, adoi))
 
     # arXiv preprints predate publication, so don't flag the year.
     problems = compare(local, rec.reference, check_year=False)
@@ -545,16 +575,16 @@ def handle_arxiv(local, args, session):
                         print(f"        - {p}")
                 else:
                     print(f"    * matches the published version ({pub_doi})")
-        return "checked", ("published", local.key, pub_doi)
+        extras.append(("published", local.key, pub_doi))
     else:
         print("    * publication status: no published version found (still a preprint)")
-    return "checked", None
+    return "checked", extras
 
 
 def handle_missing_doi(local, args, session):
     if not local.title:
         print(f"[{local.key}] SKIPPED -- no DOI and no title to search on")
-        return "skipped", None
+        return "skipped", []
 
     cands = search_crossref(local.title, local.authors,
                             mailto=args.mailto, session=session)
@@ -566,17 +596,17 @@ def handle_missing_doi(local, args, session):
               f"[title match {score:.2f}]")
         report(local.key, compare(local, best),
                ok_msg="fields otherwise match the found record")
-        return "found", ("doi", local.key, best.doi)
+        return "found", [("doi", local.key, best.doi)]
 
     if best and score >= 0.6:
         print(f"[{local.key}] no DOI -- best candidate uncertain "
               f"(title match {score:.2f}), verify manually:")
         for c in cands[:3]:
             print(f"        {c.doi}  {c.title}")
-        return "uncertain", None
+        return "uncertain", []
 
     print(f"[{local.key}] no DOI -- no confident match found on Crossref")
-    return "uncertain", None
+    return "uncertain", []
 
 
 def main(argv=None):
@@ -598,20 +628,20 @@ def main(argv=None):
     published = []      # (key, doi) preprints found to be published
 
     for local in refs:
-        if local.doi and is_arxiv_doi(local.doi):
-            status, extra = handle_arxiv(local, args, session)
-        elif extract_arxiv_id(local.raw.get("eprint", "")) and not local.doi:
-            status, extra = handle_arxiv(local, args, session)
+        arxiv_id = detect_arxiv_id(local)
+        if arxiv_id:
+            status, extras = handle_arxiv(local, args, session, arxiv_id)
         elif local.doi:
-            status, extra = handle_normal_doi(local, args, session)
+            status, extras = handle_normal_doi(local, args, session)
         else:
-            status, extra = handle_missing_doi(local, args, session)
+            status, extras = handle_missing_doi(local, args, session)
 
         counts[status] = counts.get(status, 0) + 1
-        if extra and extra[0] == "doi":
-            discovered[extra[1]] = extra[2]
-        elif extra and extra[0] == "published":
-            published.append((extra[1], extra[2]))
+        for extra in extras:
+            if extra[0] == "doi":
+                discovered[extra[1]] = extra[2]
+            elif extra[0] == "published":
+                published.append((extra[1], extra[2]))
 
     print(f"\nDone: {counts.get('checked',0)} checked, "
           f"{counts.get('found',0)} DOI found, "

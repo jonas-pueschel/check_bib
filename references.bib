@@ -7,7 +7,7 @@
 % error so you can see which message the checker produces for it.
 %
 % Run:   python check_bib.py example_references.bib --mailto you@example.org
-% Add    --out fixed.bib   to write the discovered DOI for entry [11] back.
+% Add    --out fixed.bib   to write discovered DOIs back (entries [11]-[13]).
 %
 % The five underlying papers (all correct, for reference):
 %   P1  Séguin & Kressner, "Hermite interpolation with retractions on
@@ -181,4 +181,35 @@
   volume  = {22},
   number  = {2},
   pages   = {596--627},
+}
+
+% [12] arXiv PREPRINT WITH NO doi FIELD, identified from the JOURNAL field.
+%      Many tools (Google Scholar, some BibTeX exports) emit the arXiv id in a
+%      "journal = {arXiv preprint arXiv:XXXX.XXXXX}" field and no doi. The
+%      checker detects the "arxiv" mention, constructs 10.48550/arXiv.2106.08839,
+%      verifies title/authors against the arXiv record, and -- because this
+%      preprint has since appeared in SIAM J. Optim. -- reports the published
+%      DOI (10.1137/21M1428650) under "consider updating". With --out, the
+%      constructed arXiv DOI is written back. (Preprint of P2.)
+@article{Seguin2022ContinuationPreprint,
+  author  = {S\'eguin, A. and Kressner, D.},
+  title   = {Continuation methods for {Riemannian} optimization},
+  journal = {arXiv preprint arXiv:2106.08839},
+  year    = {2021},
+}
+
+% [13] arXiv PREPRINT WITH NO doi FIELD, identified from the URL field instead.
+%      Same detection, different source field: the checker reads the arXiv id
+%      from "url", constructs 10.48550/arXiv.2212.12259, and verifies against
+%      arXiv. This is the SAME paper as entry [4], but there it carried an
+%      explicit arXiv DOI; here it has only a URL and no doi field at all --
+%      which is exactly the case this detection was added for. Since the paper
+%      is now in BIT Numer. Math., the published DOI is also surfaced.
+%      (A preprint that was NOT yet published would instead print
+%      "publication status: no published version found (still a preprint)".)
+@misc{Seguin2024HermitePreprintURL,
+  author = {S\'eguin, A. and Kressner, D.},
+  title  = {Hermite interpolation with retractions on manifolds},
+  url    = {https://arxiv.org/abs/2212.12259},
+  year   = {2022},
 }
