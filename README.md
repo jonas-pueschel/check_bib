@@ -52,3 +52,6 @@ The comparison has some caveats:
 2. The `year` field is truly disambiguous. Crossref gives different dates for `published`, `published-online`, `published-print` and `issued`. The script accepts every year that appears in any of those fields.
 3. There are no consistency checks between entries, i.e. if all entries use full or abbreviated journal titles or if all entries use the same author format. 
 
+## License
+
+MIT License © 2026 Jonas Püschel
