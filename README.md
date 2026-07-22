@@ -45,6 +45,7 @@ It has the following (optional) command line parameters
 * `--mailto you@example.org` puts you in Crossref's faster "polite" pool. The passed files do not get changed (recommended). 
 * `--out fixed.bib` creates an output file, where missing DOIs and ISBNs are added (other missing fields are not yet added).
 * `--suggest` flags missing non-essential fields (refer to the `REQUIRED_FIELDS` variable), that occur in the reference but not the `.bib` file (recommended).
+* `--concise` only display entries where action may be required.
 
 ## Caveats
 The comparison has some caveats:
