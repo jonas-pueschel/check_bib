@@ -861,7 +861,7 @@ def handle_arxiv(local, args, session, arxiv_id):
             #     else:
             #         print(f"    * matches the published version ({pub_doi})")
         extras.append(("published", local.key, pub_doi))
-    else:
+    elif not concise:
         print("    * publication status: no published version found (still a preprint)")
     return "checked", extras
 
