@@ -844,7 +844,7 @@ def handle_arxiv(local, args, session, arxiv_id):
                     f"in {j} ({best.year}) [title match {score:.2f}]")
 
     if note:
-        if args.concise and len(problems) == 0:
+        if args.concise and len(problems) == 0 and local.doi:
             report(local.key, problems, ok_msg=f"OK (matches arXiv:{arxiv_id})")
         print(f"    * publication status: {note}")
         # If we found a real published DOI, check the entry against it too.
