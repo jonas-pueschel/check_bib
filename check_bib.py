@@ -914,7 +914,8 @@ def handle_isbn(local, isbn, args, session):
     # surface it whenever the entry lacks one (regardless of --suggest).
     if not local.publisher and ref.publisher:
         problems.append(f"missing 'publisher': source has '{ref.publisher}'")
-    extras.append(("problems", problems))
+    if len(problems) > 0:
+        extras.append(("problems", problems))
     if not args.concise or len(problems) > 0:
         report(local.key, problems, ok_msg=f"OK (matches {source}, ISBN {isbn})")
     return "checked", extras
