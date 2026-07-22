@@ -53,6 +53,40 @@ The comparison has some caveats:
 2. The `year` field is truly disambiguous. Crossref gives different dates for `published`, `published-online`, `published-print` and `issued`. The script accepts every year that appears in any of those fields.
 3. There are no consistency checks between entries, i.e. if all entries use full or abbreviated journal titles or if all entries use the same author format. 
 
+## Interpreting output
+
+Some examples from the provided `references.bib` and how to interpret the output of
+```bash
+python check_bib.py references.bib
+```
+
+### [Seguin2022Continuation]
+```
+[Seguin2022Continuation] OK
+```
+Data is correct, no remarks.
+
+### [Seguin2022HermitePreprint]
+```
+[Seguin2022HermitePreprint] OK (matches arXiv:2212.12259)
+    * publication status: appears to be published as 10.1007/s10543-024-01023-y in BIT Numerical Mathematics (2024) [title match 1.00]
+```
+Data is correct, preprint is published
+
+### [Vandereycken2013WrongYear]
+```
+[Vandereycken2013WrongYear] 1 possible issue(s):
+    - year: bib='2014' vs source='2013'
+```
+Datapoint `year` is incorrect.
+
+### [AbsilMahonySepulchre2008] 
+```
+[AbsilMahonySepulchre2008] OK
+    * incomplete @book: missing required field(s): publisher
+```
+Data is correct, but required field `publisher` is missing from data.
+
 ## License
 
 MIT License © 2026 Jonas Püschel
