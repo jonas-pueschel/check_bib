@@ -260,12 +260,12 @@ def fetch_crossref(doi, mailto=None, session=None):
         r = sess.get(CROSSREF_WORK.format(doi=requests.utils.quote(doi)),
                      headers=_ua(mailto), timeout=30)
     except requests.RequestException as exc:
-        print(f"  ! network error looking up {doi}: {exc}", file=sys.stderr)
+        print(f"  ! network error looking up {doi} at {CROSSREF_WORK}: {exc}", file=sys.stderr)
         return None
     if r.status_code == 404:
         return None
     if r.status_code != 200:
-        print(f"  ! HTTP {r.status_code} for {doi}", file=sys.stderr)
+        print(f"  ! HTTP {r.status_code} for {doi} at {CROSSREF_WORK}", file=sys.stderr)
         return None
     return crossref_to_reference(r.json().get("message", {}))
 
@@ -284,6 +284,7 @@ def search_crossref(title, authors, mailto=None, session=None, rows=5):
         print(f"  ! network error during search: {exc}", file=sys.stderr)
         return []
     if r.status_code != 200:
+        print(f"  ! HTTP {r.status_code} at {CROSSREF_SEARCH}", file=sys.stderr)
         return []
     items = r.json().get("message", {}).get("items", [])
     return [crossref_to_reference(it) for it in items]
@@ -367,7 +368,7 @@ def fetch_arxiv(arxiv_id, session=None):
         print(f"  ! network error looking up arXiv:{arxiv_id}: {exc}", file=sys.stderr)
         return None
     if r.status_code != 200:
-        print(f"  ! arXiv HTTP {r.status_code} for {arxiv_id}", file=sys.stderr)
+        print(f"  ! arXiv HTTP {r.status_code} for {arxiv_id} at {ARXIV_API}", file=sys.stderr)
         return None
     return parse_arxiv_atom(r.text)
 
@@ -448,6 +449,7 @@ def fetch_openlibrary(isbn, session=None):
     except requests.RequestException:
         return None
     if r.status_code != 200:
+        print(f"  ! HTTP {r.status_code} at {OPENLIB_API}", file=sys.stderr)
         return None
     rec = r.json().get(f"ISBN:{isbn}")
     if not rec:
@@ -472,6 +474,7 @@ def fetch_googlebooks(isbn, session=None):
     except requests.RequestException:
         return None
     if r.status_code != 200:
+        print(f"  ! HTTP {r.status_code} at {GOOGLEBOOKS_API}", file=sys.stderr)
         return None
     items = r.json().get("items", [])
     if not items:
@@ -508,6 +511,7 @@ def search_openlibrary_books(title, authors, session=None, limit=5):
     except requests.RequestException:
         return []
     if r.status_code != 200:
+        print(f"  ! HTTP {r.status_code} at https://openlibrary.org/search.json", file=sys.stderr)
         return []
     out = []
     for d in r.json().get("docs", [])[:limit]:
@@ -534,8 +538,10 @@ def search_googlebooks_books(title, authors, session=None, limit=5):
     except requests.RequestException:
         return []
     if r.status_code != 200:
+        print(f"  ! HTTP {r.status_code} at {GOOGLEBOOKS_API}", file=sys.stderr)
         return []
     out = []
+    print(r.json())
     for it in r.json().get("items", [])[:limit]:
         vi = it.get("volumeInfo", {})
         ym = re.search(r"\d{4}", vi.get("publishedDate", ""))
@@ -779,16 +785,18 @@ def report(key, problems, ok_msg="OK"):
 def handle_normal_doi(local, args, session):
     ref = fetch_crossref(local.doi, mailto=args.mailto, session=session)
     time.sleep(args.delay)
+    extras = []
     if ref is None:
         print(f"[{local.key}] SKIPPED -- DOI '{local.doi}' not found on Crossref")
         return "skipped", []
     if args.concise:
         problems = compare(local, ref, suggest=args.suggest)
         if len(problems) > 0:
+            extras.append(("problems", problems))
             report(local.key, problems)
     else:
         report(local.key, compare(local, ref, suggest=args.suggest))
-    return "checked", []
+    return "checked", extras
 
 
 def handle_arxiv(local, args, session, arxiv_id):
@@ -809,7 +817,9 @@ def handle_arxiv(local, args, session, arxiv_id):
 
     # arXiv preprints predate publication, so don't flag the year.
     problems = compare(local, rec.reference, check_year=False, suggest=args.suggest)
-    
+    if len(problems) > 0:
+        extras.append(("problems", problems))
+
     if not args.concise or len(problems) > 0:
         report(local.key, problems, ok_msg=f"OK (matches arXiv:{arxiv_id})")
 
@@ -860,7 +870,7 @@ def handle_missing_doi(local, args, session):
     if not local.title:
         print(f"[{local.key}] SKIPPED -- no DOI and no title to search on")
         return "skipped", []
-
+    extras = []
     cands = search_crossref(local.title, local.authors,
                             mailto=args.mailto, session=session)
     time.sleep(args.delay)
@@ -870,24 +880,28 @@ def handle_missing_doi(local, args, session):
         print(f"[{local.key}] no DOI in entry -> found {best.doi} "
               f"[title match {score:.2f}]")
         problems = compare(local, best, suggest=args.suggest)
+        if len(problems) > 0:
+            extras.append(("problems", problems))
         if not args.concise or len(problems) > 0:
             report(local.key, problems, ok_msg="fields otherwise match the found record")
-        return "found", [("doi", local.key, best.doi)]
+        extras.append(("doi", local.key, best.doi))
+        return "found", extras
 
     if best and score >= 0.6:
         print(f"[{local.key}] no DOI -- best candidate uncertain "
               f"(title match {score:.2f}), verify manually:")
         for c in cands[:3]:
             print(f"        {c.doi}  {c.title}")
-        return "uncertain", []
+        return "uncertain", extras
 
     print(f"[{local.key}] no DOI -- no confident match found on Crossref")
-    return "uncertain", []
+    return "uncertain", extras
 
 
 def handle_isbn(local, isbn, args, session):
     """Look a (no-DOI) book up by ISBN via Open Library / Google Books.
     Falls back to the Crossref title search if the ISBN isn't found."""
+    extras = []
     ref, source = fetch_book_by_isbn(isbn, session=session)
     time.sleep(args.delay)
     if ref is None:
@@ -900,9 +914,10 @@ def handle_isbn(local, isbn, args, session):
     # surface it whenever the entry lacks one (regardless of --suggest).
     if not local.publisher and ref.publisher:
         problems.append(f"missing 'publisher': source has '{ref.publisher}'")
+    extras.append(("problems", problems))
     if not args.concise or len(problems) > 0:
         report(local.key, problems, ok_msg=f"OK (matches {source}, ISBN {isbn})")
-    return "checked", []
+    return "checked", extras
 
 
 # Entry types treated as books when they have no DOI/ISBN: these resolve far
@@ -916,6 +931,7 @@ def handle_missing_book(local, args, session):
     like the article path), matched on title+author, and not failed on a year
     gap, because editions/reprints legitimately differ. Falls back to the
     Crossref title search if the catalogs turn up nothing."""
+    extras = []
     if not local.title:
         print(f"[{local.key}] SKIPPED -- no DOI/ISBN and no title to search on")
         return "skipped", []
@@ -952,6 +968,8 @@ def handle_missing_book(local, args, session):
         if not args.concise or len(problems) > 0:
             report(local.key, problems, ok_msg="title/author match the catalog record")
         extras = [("isbn", local.key, best.isbn)] if best.isbn else []
+        if len(problems) > 0:
+            extras.append(("problems", problems))
         return "found", extras
 
     if best and score >= 0.6:
@@ -1048,38 +1066,6 @@ def main(argv=None):
     elif discovered:
         print(f"\n{len(discovered)} identifier(s) recovered (doi/isbn) -- "
               f"re-run with --out FILE to write them into a copy of the .bib.")
-
-
-# --------------------------------------------------------------------------
-# Optional: doi2bib backend
-# --------------------------------------------------------------------------
-
-def fetch_doi2bib(doi, session=None):
-    sess = session or requests.Session()
-    try:
-        r = sess.get(f"https://www.doi2bib.org/bib/{requests.utils.quote(doi)}",
-                     headers={"Accept": "application/x-bibtex"}, timeout=30)
-    except requests.RequestException:
-        return None
-    if r.status_code != 200 or not r.text.strip():
-        return None
-    db = bibtexparser.bparser.BibTexParser(common_strings=True).parse(r.text)
-    if not db.entries:
-        return None
-    e = db.entries[0]
-    return Reference(
-        title=clean_latex(e.get("title", "")),
-        authors=parse_bib_authors(e.get("author", "")),
-        journal=clean_latex(e.get("journal", "")),
-        year=e.get("year", "").strip(),
-        volume=e.get("volume", "").strip(),
-        number=e.get("number", "").strip(),
-        pages=e.get("pages", "").strip(),
-        article_number=e.get("eid", "").strip() or e.get("article-number", "").strip(),
-        doi=e.get("doi", "").strip() or doi,
-        raw=e,
-    )
-
 
 if __name__ == "__main__":
     main()
