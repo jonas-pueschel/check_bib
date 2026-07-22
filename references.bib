@@ -26,7 +26,7 @@ Both files are updated.
 
 check_bib.py — leading comment. The module docstring now reflects everything the script does: the four lookup routes (Crossref DOI, arXiv preprint via DOI/eprint/url/journal, book-by-ISBN via Open Library then Google Books, and the Crossref title-search fallback), the tolerances built into field comparison (abbreviated authors, journal abbreviations, combined issues, online-first years, U+FFFD corruption), the structural required-field check per entry type, and the --suggest/--out flags with a usage example for each.
 
-example_references.bib — two ISBN books added (now 17 entries), in a new "BOOKS WITH NO DOI" section, using Boumal's An Introduction to Optimization on Smooth Manifolds (Cambridge, 2023, ISBN 978-1-009-16617-1 — verified):
+example_references.bib — two ISBN books added (now 17 entries), in a new "BOOKS WITH NO DOI" section, using Boumal's Introduction to Optimization on Smooth Manifolds (Cambridge, 2023, ISBN 978-1-009-16617-1 — verified):
 
     [16] Boumal2023 — a correct @book with an ISBN and no DOI. It resolves through the ISBN lookup and reports OK — the headline demonstration that books without DOIs are now handled.
     [17] Boumal2023NoPublisher — the same book with the publisher removed. Two things fire together: the structural check flags the missing required field, and the ISBN lookup supplies the real value (source has 'Cambridge University Press').
@@ -155,7 +155,7 @@ Example references · BIB
 %   P6  Absil, Mahony & Sepulchre, "Optimization Algorithms on Matrix
 %       Manifolds" (book), Princeton Univ. Press, 2008.
 %       doi:10.1515/9781400830244
-%   P7  Boumal, "An Introduction to Optimization on Smooth Manifolds" (book),
+%   P7  Boumal, "Introduction to Optimization on Smooth Manifolds" (book),
 %       Cambridge Univ. Press, 2023.   isbn:978-1-009-16617-1
 % ============================================================================
  
@@ -389,7 +389,7 @@ Example references · BIB
 %      fields are present and match the catalog record. Expected: OK.
 @book{Boumal2023,
   author    = {Boumal, N.},
-  title     = {An Introduction to Optimization on Smooth Manifolds},
+  title     = {Introduction to Optimization on Smooth Manifolds},
   publisher = {Cambridge University Press},
   year      = {2023},
   isbn      = {978-1-009-16617-1},
@@ -401,7 +401,7 @@ Example references · BIB
 %      so you know what to add. (Same book as [16], with the publisher removed.)
 @book{Boumal2023NoPublisher,
   author = {Boumal, N.},
-  title  = {An Introduction to Optimization on Smooth Manifolds},
+  title  = {Introduction to Optimization on Smooth Manifolds},
   year   = {2023},
   isbn   = {978-1-009-16617-1},
 }
