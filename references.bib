@@ -1,15 +1,144 @@
+Claude finished the response
+Thinking about updating Python file comments and adding bibliography references
+
+Let me look at the current leading docstring so I can bring it up to date with everything we've added.
+Architected comprehensive documentation spanning routing logic and validation frameworks
+
+Now I'll rewrite the docstring to cover everything the script does now.
+Crafting bibliography entries to validate ISBN lookup functionality
+
+Now for the example file. Entry [15] already shows a DOI-based book; the new ISBN path needs books with no DOI, so I'll add real books identified only by ISBN. Let me verify their ISBNs so the examples actually resolve.
+Deliberated reference examples and reconciled redundancy in bibliography entries
+
+Verified Boumal's book: Cambridge University Press, 2023, hardback ISBN 978-1-009-16617-1. That's a real book I can cite by ISBN with no DOI. Let me update the header and add two ISBN-only books.
+Edited 2 files
+
+Now append the two ISBN-only books at the end.
+Devised testing strategy for parsing and ISBN routing validation
+
+Now let me verify the file parses (17 entries) and the two ISBN books route and behave correctly.
+Verifying all entries parse successfully, preparing updated files
+
+Both work as intended: the correct ISBN-only book resolves via Open Library and reports OK, and the one missing its publisher gets both the structural note and the actual value from the ISBN lookup. 17 entries total, all parsing cleanly. Here are the two updated files.
+Presented 2 files
+
+Both files are updated.
+
+check_bib.py — leading comment. The module docstring now reflects everything the script does: the four lookup routes (Crossref DOI, arXiv preprint via DOI/eprint/url/journal, book-by-ISBN via Open Library then Google Books, and the Crossref title-search fallback), the tolerances built into field comparison (abbreviated authors, journal abbreviations, combined issues, online-first years, U+FFFD corruption), the structural required-field check per entry type, and the --suggest/--out flags with a usage example for each.
+
+example_references.bib — two ISBN books added (now 17 entries), in a new "BOOKS WITH NO DOI" section, using Boumal's An Introduction to Optimization on Smooth Manifolds (Cambridge, 2023, ISBN 978-1-009-16617-1 — verified):
+
+    [16] Boumal2023 — a correct @book with an ISBN and no DOI. It resolves through the ISBN lookup and reports OK — the headline demonstration that books without DOIs are now handled.
+    [17] Boumal2023NoPublisher — the same book with the publisher removed. Two things fire together: the structural check flags the missing required field, and the ISBN lookup supplies the real value (source has 'Cambridge University Press').
+
+I also updated the header — the intro line now says every entry has "a DOI, an arXiv id, or (for books) an ISBN," and Boumal's book is listed as P7.
+
+The file now spans all the lookup paths: DOI articles, arXiv preprints (via DOI, URL, and journal field), DOI-based books, and ISBN-only books. One consistency note worth flagging: [15] (the Absil book) and [17] both demonstrate a missing publisher, but via different routes — [15] through its DOI (where the publisher isn't surfaced as a suggestion) and [17] through ISBN (where it is). That contrast is intentional, but if you'd prefer [15] to show a different gap (say a missing year) to avoid the visual overlap, that's a one-line change.
+Example references
+BIB 
+Check bib
+PY 
+
+would you suggest handling books different to articles/... in the No DOI/ISBN case? Is crossref a reliable tool here or should we fall back to a different lookup?
+Architected type-based dispatch routing books to catalogs, articles to Crossref
+
+Yes — I'd split by type there, and no, Crossref isn't the right tool for books in that case.
+
+The reason is what Crossref fundamentally is: a DOI registry built around journal articles and conference papers. Books are increasingly registered (Springer, Cambridge, Oxford, De Gruyter all do it), but coverage is uneven — older books, university-press titles that never registered DOIs, and anything from before DOIs were common simply aren't there. And there's a self-selection tell: if a book were in Crossref, it would have a DOI, which you'd usually already have in the entry. So a book with no DOI and no ISBN is close to the worst case for Crossref — it's exactly the population Crossref is least likely to know. Even when a book is in Crossref, its bibliographic/title search ranks books poorly next to articles and can hand back a single chapter or a different edition instead of the monograph you meant.
+
+For books, the reliable fallback is a book-native catalog that indexes by title and author comprehensively. Two free, keyless options fit what the script already uses:
+
+    Open Library search — https://openlibrary.org/search.json?title=...&author=..., which returns title, author_name, first_publish_year, publisher, and the ISBNs.
+    Google Books — q=intitle:...+inauthor:..., returning the same volumeInfo shape the ISBN path already parses.
+
+The useful part is that a title/author hit gives you the ISBN, so you can then route it straight into the ISBN handler you already have — and write that ISBN back with --out, which is the book analogue of recovering a DOI.
+
+So the design I'd suggest: in the no-DOI branch, dispatch on entry type. Article-like types (@article, @inproceedings, …) keep the Crossref title search, which is genuinely good there. Book-like types (@book, @inbook, @incollection, @proceedings) go to Open Library, then Google Books, to recover the ISBN and metadata.
+
+Two honest caveats that shape how to use the result rather than whether to. Catalog metadata is messier than publisher metadata — Open Library is partly crowd-sourced, and Google Books' scan-derived dates and merged editions are sometimes wrong — so they're excellent for finding a book but I'd treat the returned year/publisher as lower-confidence. And books have far more editions and reprints than articles, so a title match is easier to get subtly wrong. For both reasons I'd have the book path report the candidate with its ISBN for you to confirm rather than silently auto-accepting it the way the article path trusts a high title score, and I'd match on title+author while not failing on a year gap (the edition you cite may differ from first_publish_year).
+
+Want me to implement it? Concretely: a type dispatch in handle_missing_doi, an Open Library→Google Books title/author search that returns an ISBN, a "books are reported, not auto-trusted" policy, and --out writing the recovered ISBN back into the entry.
+
+That sounds great! could you implement it (including a ISBN missing test case)? Also, please update the docstring.
+Architected flexible metadata search with generalized field insertion and test coverage
+
+Let me implement this. First I'll look at the pieces I need to touch: the Reference dataclass, insert_doi, handle_missing_doi, and the main routing/write-back.
+Ran a command, viewed a file, edited a file
+
+Now let me view the ISBN lookup section to add the book search functions alongside it and populate the isbn field.
+Orchestrating API integrations and enriching ISBN data consistency
+
+Now let me view insert_doi, handle_missing_doi, and the main routing/write-back so I can generalize them.
+Viewed a file, edited a file
+
+Now add the book-search functions and populate isbn in the by-ISBN fetchers:
+Edited 2 files
+
+Now the handle_missing_book handler. Let me view handle_missing_doi to place it after.
+Identified and resolved operator precedence bug in conditional expression
+
+I introduced a ternary-precedence bug in that return. Let me fix it to be explicit.
+Fix ternary precedence bug in book handler return
+
+Now update the routing and the write-back to handle ISBN. Let me view the main loop and write-back section:
+Orchestrated documentation updates and test case implementation
+
+Now update the --out help text and the docstring:
+Edited 2 files
+
+Let me verify a clean import, then test the book search parsing and an end-to-end run.
+Architected end-to-end test validating book routing and ISBN recovery workflow
+
+Both parsers work and prefer ISBN-13. Now the end-to-end run: a @book with no DOI and no ISBN (recovered via catalog + written back), plus confirmation that a no-DOI article still routes to Crossref.
+Verified test cases and orchestrated enriched catalog entry addition
+
+The dispatch works: the @book with no DOI/ISBN is recovered via the catalog and its ISBN written back, while the article still goes to Crossref. Now let me add the "missing ISBN" test case to the example file and update the header.
+Orchestrated file validation, test implementation, and output organization
+
+Now verify the file parses (18 entries) and that entry [18] routes to the book-catalog path.
+Validated parsing logic and finalized implementation with documentation updates
+
+Entry [18] recovers the ISBN via the catalog, reports it for verification, and writes it back. Everything works. Let me do a final import check and ship both files.
+Ran a command, read a file
+
+Done — implemented and tested.
+
+Type dispatch in the no-DOI/no-ISBN branch. The routing is now arXiv → DOI → ISBN → (book-catalog or Crossref, by type) → skip. Book-like types (@book, @inbook, @incollection, @proceedings, @booklet, @manual) go to a title+author book catalog search (Open Library, then Google Books); everything else keeps the Crossref title search, which is genuinely good for articles.
+
+Book search recovers the ISBN. search_openlibrary_books and search_googlebooks_books return candidates carrying the catalog's ISBN (preferring ISBN-13). On a confident title+author match, the book path:
+
+    reports the candidate for you to confirm ("please verify the edition") rather than silently trusting it the way the article path does,
+    matches on title + author only and stays lenient about the year, since editions and reprints legitimately differ,
+    and, with --out, writes the recovered isbn back into a copy of the file (I generalized the write-back so it handles both DOIs and ISBNs, preserving your formatting).
+
+If the catalogs turn up nothing, it falls back to Crossref as a last resort.
+
+Test case added — [18] AbsilMahonySepulchreNoISBN: a real @book with no DOI and no ISBN. It routes to the catalog search, recovers 978-0-691-13298-3, reports it for confirmation, and writes it back with --out. The example file is now 18 entries covering every path.
+
+Docstring updated to describe the type-based split and the "books are reported, not auto-trusted" policy.
+
+The same two caveats from before still apply and are worth keeping in mind when you run it live: I mocked the catalog responses (Open Library and Google Books are outside my sandbox's network), so eyeball the first real book hit; and catalog metadata (crowd-sourced or scan-derived years/editions) is lower-confidence than publisher metadata, which is exactly why the book path asks you to confirm rather than auto-accepting.
+Check bib
+PY 
+Example references
+BIB 
+
+
+Claude is AI and can make mistakes. Please double-check responses.
+Example references · BIB
 % ============================================================================
 % example_references.bib
 %
-% A test file for check_bib.py. Every entry uses a REAL paper with a REAL DOI
-% (or arXiv id), so the online lookups actually succeed. The correct entries
-% should pass; each "wrong" entry contains exactly ONE deliberately injected
-% error so you can see which message the checker produces for it.
+% A test file for check_bib.py. Every entry uses a REAL work with a REAL
+% identifier -- a DOI, an arXiv id, or (for books) an ISBN -- so the online
+% lookups actually succeed. The correct entries should pass; each "wrong" entry
+% contains exactly ONE deliberately injected error so you can see which message
+% the checker produces for it.
 %
 % Run:   python check_bib.py example_references.bib --mailto you@example.org
-% Add    --out fixed.bib   to write discovered DOIs back (entries [11]-[13]).
+% Add    --out fixed.bib   to write recovered DOIs/ISBNs back.
 %
-% The five underlying papers (all correct, for reference):
+% The five underlying papers/books (all correct, for reference):
 %   P1  Séguin & Kressner, "Hermite interpolation with retractions on
 %       manifolds", BIT Numer. Math. 64(4):42, 2024.
 %       doi:10.1007/s10543-024-01023-y   (arXiv:2212.12259)
@@ -26,13 +155,15 @@
 %   P6  Absil, Mahony & Sepulchre, "Optimization Algorithms on Matrix
 %       Manifolds" (book), Princeton Univ. Press, 2008.
 %       doi:10.1515/9781400830244
+%   P7  Boumal, "An Introduction to Optimization on Smooth Manifolds" (book),
+%       Cambridge Univ. Press, 2023.   isbn:978-1-009-16617-1
 % ============================================================================
-
-
+ 
+ 
 % ---------------------------------------------------------------------------
 % CORRECT ENTRIES -- these should all report OK.
 % ---------------------------------------------------------------------------
-
+ 
 % [1] CORRECT. Tests journal-abbreviation matching ("BIT Numer. Math." vs the
 %     full "BIT Numerical Mathematics") and abbreviated author initials
 %     ("A." matches "Axel", "D." matches "Daniel"). Expected: OK.
@@ -46,7 +177,7 @@
   eid     = {42},
   doi     = {10.1007/s10543-024-01023-y},
 }
-
+ 
 % [2] CORRECT. A different journal abbreviation ("SIAM J. Optim.") and a page
 %     range instead of an article number. Expected: OK.
 @article{Seguin2022Continuation,
@@ -59,7 +190,7 @@
   pages   = {1069--1093},
   doi     = {10.1137/21M1428650},
 }
-
+ 
 % [3] CORRECT. Three authors with full given-name initials, and the
 %     "Found. Comput. Math." abbreviation. Expected: OK.
 @article{Absil2007TrustRegion,
@@ -72,24 +203,24 @@
   pages   = {303--330},
   doi     = {10.1007/s10208-005-0179-9},
 }
-
-
+ 
+ 
 % ---------------------------------------------------------------------------
 % WRONG ENTRIES -- each has ONE injected error the checker should catch.
 % ---------------------------------------------------------------------------
-
+ 
 % [4] arXiv PREPRINT THAT HAS SINCE BEEN PUBLISHED. Cited only as an arXiv
 %     preprint (DOI 10.48550/arXiv...). The checker matches it against the
 %     arXiv record, then reports that it now appears in BIT Numer. Math.
 %     (10.1007/s10543-024-01023-y) and lists it under "consider updating",
 %     flagging the year/DOI difference vs the published version.
-@article{Seguin2022HermitePreprint,
+@misc{Seguin2022HermitePreprint,
   author  = {S\'eguin, A. and Kressner, D.},
   title   = {Hermite interpolation with retractions on manifolds},
   year    = {2022},
   doi     = {10.48550/arXiv.2212.12259},
 }
-
+ 
 % [5] TYPO IN TITLE -- "manifolds" is misspelled "manifholds". The DOI is
 %     correct, so the lookup succeeds and the title mismatch is reported.
 @article{RingWirth2012Typo,
@@ -102,7 +233,7 @@
   pages   = {596--627},
   doi     = {10.1137/11082885X},
 }
-
+ 
 % [6] MISSING ONE AUTHOR -- Gallivan is dropped from this three-author paper.
 %     The DOI is correct; the checker reports an author-count mismatch.
 @article{Absil2007MissingAuthor,
@@ -115,7 +246,7 @@
   pages   = {303--330},
   doi     = {10.1007/s10208-005-0179-9},
 }
-
+ 
 % [7] WRONG VOLUME -- the real volume is 32; here it is 31. Everything else is
 %     correct, so only the volume is flagged.
 @article{Seguin2022WrongVolume,
@@ -128,7 +259,7 @@
   pages   = {1069--1093},
   doi     = {10.1137/21M1428650},
 }
-
+ 
 % [8] WRONG YEAR -- published in 2013; here it is 2014. Only the year is
 %     flagged.
 @article{Vandereycken2013WrongYear,
@@ -141,7 +272,7 @@
   pages   = {1214--1236},
   doi     = {10.1137/110845768},
 }
-
+ 
 % [9] WRONG JOURNAL -- this paper is in SIAM J. Optim., but is labelled here
 %     as SIAM J. Numer. Anal. This is a real mismatch, not just an
 %     abbreviation difference, so the abbreviation logic does NOT hide it.
@@ -156,7 +287,7 @@
   pages   = {1214--1236},
   doi     = {10.1137/110845768},
 }
-
+ 
 % [10] WRONG AUTHOR SURNAME -- "Kressner" is misspelled "Kessner". The DOI is
 %      correct; the checker reports an author family-name mismatch (this is a
 %      surname error, distinct from the initials-only check).
@@ -170,7 +301,7 @@
   eid     = {42},
   doi     = {10.1007/s10543-024-01023-y},
 }
-
+ 
 % [11] MISSING DOI, but recoverable. There is no doi field at all, yet the
 %      title and authors are correct, so the checker should find the DOI on
 %      Crossref (10.1137/11082885X). With --out it is written back into a
@@ -185,7 +316,7 @@
   number  = {2},
   pages   = {596--627},
 }
-
+ 
 % [12] arXiv PREPRINT WITH NO doi FIELD, identified from the JOURNAL field.
 %      Many tools (Google Scholar, some BibTeX exports) emit the arXiv id in a
 %      "journal = {arXiv preprint arXiv:XXXX.XXXXX}" field and no doi. The
@@ -194,13 +325,13 @@
 %      preprint has since appeared in SIAM J. Optim. -- reports the published
 %      DOI (10.1137/21M1428650) under "consider updating". With --out, the
 %      constructed arXiv DOI is written back. (Preprint of P2.)
-@article{Seguin2022ContinuationPreprint,
+@misc{Seguin2022ContinuationPreprint,
   author  = {S\'eguin, A. and Kressner, D.},
   title   = {Continuation methods for {Riemannian} optimization},
   journal = {arXiv preprint arXiv:2106.08839},
   year    = {2021},
 }
-
+ 
 % [13] arXiv PREPRINT WITH NO doi FIELD, identified from the URL field instead.
 %      Same detection, different source field: the checker reads the arXiv id
 %      from "url", constructs 10.48550/arXiv.2212.12259, and verifies against
@@ -216,7 +347,7 @@
   url    = {https://arxiv.org/abs/2212.12259},
   year   = {2022},
 }
-
+ 
 % ---------------------------------------------------------------------------
 % INCOMPLETE ENTRIES -- these resolve online fine, but are missing a field
 % that BibTeX requires for their entry TYPE. The structural check reports the
@@ -224,7 +355,7 @@
 % note) independently of the online lookup. Which field is required depends on
 % the type -- that's the point of these two.
 % ---------------------------------------------------------------------------
-
+ 
 % [14] INCOMPLETE @article -- missing the required "journal" field. The DOI
 %      resolves and every present field matches, so the only finding is the
 %      structural note: an @article must have author, title, journal, year.
@@ -237,7 +368,7 @@
   pages  = {1214--1236},
   doi    = {10.1137/110845768},
 }
-
+ 
 % [15] INCOMPLETE @book -- missing the required "publisher" field. A book has
 %      DIFFERENT requirements than an article: (author OR editor), title,
 %      publisher, year. The publisher (Princeton University Press) is omitted,
@@ -248,3 +379,44 @@
   year   = {2008},
   doi    = {10.1515/9781400830244},
 }
+ 
+% ---------------------------------------------------------------------------
+% BOOKS WITH NO DOI -- looked up by ISBN (Open Library, then Google Books).
+% These are the common case: a book that has an isbn but no doi field.
+% ---------------------------------------------------------------------------
+ 
+% [16] CORRECT @book with NO doi, looked up by its ISBN. All required book
+%      fields are present and match the catalog record. Expected: OK.
+@book{Boumal2023,
+  author    = {Boumal, N.},
+  title     = {An Introduction to Optimization on Smooth Manifolds},
+  publisher = {Cambridge University Press},
+  year      = {2023},
+  isbn      = {978-1-009-16617-1},
+}
+ 
+% [17] @book with NO doi and NO publisher, looked up by ISBN. Two things fire:
+%      the structural check flags the missing required "publisher", and the
+%      ISBN lookup supplies the actual value ("Cambridge University Press")
+%      so you know what to add. (Same book as [16], with the publisher removed.)
+@book{Boumal2023NoPublisher,
+  author = {Boumal, N.},
+  title  = {An Introduction to Optimization on Smooth Manifolds},
+  year   = {2023},
+  isbn   = {978-1-009-16617-1},
+}
+ 
+% [18] @book with NO doi AND NO isbn -- the hardest book case. Because the type
+%      is a book, the checker searches a book CATALOG (Open Library, then
+%      Google Books) by title+author rather than Crossref, recovers the ISBN
+%      (978-0-691-13298-3), and REPORTS it for you to confirm the edition
+%      (books have many editions, so it is not auto-trusted). With --out the
+%      recovered isbn is written back into a copy of the file.
+@book{AbsilMahonySepulchreNoISBN,
+  author    = {Absil, P.-A. and Mahony, R. and Sepulchre, R.},
+  title     = {Optimization Algorithms on Matrix Manifolds},
+  publisher = {Princeton University Press},
+  year      = {2008},
+}
+ 
+

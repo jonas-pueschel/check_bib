@@ -10,10 +10,19 @@ For each entry the script does whichever of these applies:
                               also check whether the preprint has since been
                               published (via arXiv's journal_ref / linked DOI
                               and a Crossref title search).
-  * Has no DOI at all      -> search Crossref by title + author to find the
-                              DOI, verify the title really matches, report it,
-                              and (with --out) write it back into a copy of the
-                              .bib file.
+  * Book with an ISBN     -> Open Library, then Google Books (no API key). Used
+                             for books that have no DOI.
+  * No DOI/ISBN           -> the lookup is chosen by entry type:
+                             - articles/proceedings papers: Crossref title+
+                               author search; a close title match reports the
+                               DOI and, with --out, writes it back;
+                             - books (@book/@inbook/@incollection/...): a book
+                               catalog search (Open Library, then Google Books)
+                               to recover the ISBN. Crossref's book coverage is
+                               spotty, so catalogs are used instead. Book hits
+                               are REPORTED for you to confirm (not auto-
+                               trusted), matched on title+author, and lenient
+                               about edition/year; --out writes the ISBN back.
 
 
 ## Dependencies:

@@ -1,28 +1,51 @@
 #!/usr/bin/env python3
 """
-check_bib.py -- Verify the fields of .bib entries against authoritative online
-sources, and fill in / flag missing information.
+check_bib.py -- Verify .bib entries against authoritative online sources, and
+flag missing or inconsistent information.
 
-For each entry the script does whichever of these applies:
+For each entry the script picks a lookup based on what identifiers it has:
 
-  * Has a normal DOI      -> look it up on Crossref and compare every field.
-  * Has an arXiv DOI       -> Crossref doesn't hold arXiv records (they live at
-    (10.48550/arXiv...)       DataCite), so query the arXiv API instead, then
-                              also check whether the preprint has since been
-                              published (via arXiv's journal_ref / linked DOI
-                              and a Crossref title search).
-  * Has no DOI at all      -> search Crossref by title + author to find the
-                              DOI, verify the title really matches, report it,
-                              and (with --out) write it back into a copy of the
-                              .bib file.
+  * Normal DOI            -> Crossref (structured JSON: separate given/family
+                             names, and both the full journal name and its ISO
+                             abbreviation, which makes checking abbreviated
+                             authors and journals reliable).
+  * arXiv preprint        -> the arXiv API. Recognised from an arXiv DOI
+    (10.48550/arXiv...)      (10.48550/arXiv...), an `eprint` field, or an
+                             arXiv id in the `url`/`journal` field. Also checks
+                             whether the preprint has since been published
+                             (arXiv's journal_ref / linked DOI, or a Crossref
+                             title search) and can construct its arXiv DOI.
+  * Book with an ISBN     -> Open Library, then Google Books (no API key). Used
+                             for books that have no DOI.
+  * No DOI/ISBN           -> the lookup is chosen by entry type:
+                             - articles/proceedings papers: Crossref title+
+                               author search; a close title match reports the
+                               DOI and, with --out, writes it back;
+                             - books (@book/@inbook/@incollection/...): a book
+                               catalog search (Open Library, then Google Books)
+                               to recover the ISBN. Crossref's book coverage is
+                               spotty, so catalogs are used instead. Book hits
+                               are REPORTED for you to confirm (not auto-
+                               trusted), matched on title+author, and lenient
+                               about edition/year; --out writes the ISBN back.
 
-Why Crossref for the lookup? Its REST API returns structured JSON: separate
-given/family names, and BOTH the full journal name and its ISO abbreviation,
-which makes checking abbreviated authors and journal abbreviations reliable.
+Field comparison is deliberately tolerant of harmless variation:
+  - abbreviated author given names ("A." matches "Axel"), full family names;
+  - journal abbreviations ("BIT Numer. Math." vs "BIT Numerical Mathematics");
+  - combined journal issues ("7" matches a "7-8" double issue);
+  - online-first papers (prefers the print/volume year, accepts either);
+  - corrupted source metadata (a U+FFFD where an umlaut was lost on ingest is
+    treated as a near-match, not a title mismatch).
+
+It also checks each entry for the fields BibTeX REQUIRES for its type
+(@article needs journal; @book needs publisher; @inproceedings needs
+booktitle; etc.), independently of the online lookup.
 
 Usage:
     python check_bib.py references.bib --mailto you@example.org
     python check_bib.py references.bib --mailto you@example.org --out fixed.bib
+    python check_bib.py references.bib --suggest   # also suggest missing
+                                                   # volume/issue/pages/publisher
 
 Dependencies:
     pip install bibtexparser pylatexenc requests
@@ -73,6 +96,8 @@ class Reference:
     article_number: str = ""
     doi: str = ""
     journal_alt: str = ""            # crossref short-container-title
+    publisher: str = ""              # mainly for books
+    isbn: str = ""                   # recovered for books found by title search
     raw: dict = field(default_factory=dict)
 
 
@@ -166,6 +191,7 @@ def parse_bib(path: str) -> list[Reference]:
             pages=e.get("pages", "").strip(),
             article_number=e.get("eid", "").strip() or e.get("article-number", "").strip(),
             doi=e.get("doi", "").strip(),
+            publisher=e.get("publisher", "").strip(),
             raw=e,
         ))
     return refs
@@ -223,6 +249,7 @@ def crossref_to_reference(msg: dict) -> Reference:
         pages=str(msg.get("page", "")).strip(),
         article_number=str(msg.get("article-number", "")).strip(),
         doi=str(msg.get("DOI", "")).strip(),
+        publisher=str(msg.get("publisher", "")).strip(),
         raw=msg,
     )
 
@@ -384,6 +411,163 @@ def parse_arxiv_atom(xml_text: str):
         published_doi=(doi_el.text or "").strip() if doi_el is not None else "",
         journal_ref=(jref_el.text or "").strip() if jref_el is not None else "",
     )
+
+
+# --------------------------------------------------------------------------
+# 3c. Book lookup by ISBN (for books that have no DOI)
+# --------------------------------------------------------------------------
+
+OPENLIB_API = "https://openlibrary.org/api/books"
+GOOGLEBOOKS_API = "https://www.googleapis.com/books/v1/volumes"
+
+
+def clean_isbn(s: str) -> str:
+    """Strip hyphens/spaces from an ISBN: '978-0-691-13298-3' -> '9780691132983'."""
+    return re.sub(r"[^0-9Xx]", "", s or "").upper()
+
+
+def _split_name(fullname: str) -> tuple[str, str]:
+    """'P.-A. Absil' -> ('Absil', 'P.-A.'); 'Absil, P.-A.' -> ('Absil','P.-A.')."""
+    fullname = clean_latex(fullname).strip()
+    if "," in fullname:
+        fam, _, given = fullname.partition(",")
+        return fam.strip(), given.strip()
+    bits = fullname.split()
+    if not bits:
+        return "", ""
+    return bits[-1], " ".join(bits[:-1])
+
+
+def fetch_openlibrary(isbn, session=None):
+    """Look a book up on Open Library by ISBN (no key needed)."""
+    sess = session or requests.Session()
+    try:
+        r = sess.get(OPENLIB_API, params={"bibkeys": f"ISBN:{isbn}",
+                     "format": "json", "jscmd": "data"},
+                     headers={"User-Agent": "check_bib/2.0"}, timeout=30)
+    except requests.RequestException:
+        return None
+    if r.status_code != 200:
+        return None
+    rec = r.json().get(f"ISBN:{isbn}")
+    if not rec:
+        return None
+    authors = [_split_name(a.get("name", "")) for a in rec.get("authors", [])
+               if a.get("name")]
+    pubs = rec.get("publishers", [])
+    publisher = pubs[0].get("name", "") if pubs else ""
+    ym = re.search(r"\d{4}", rec.get("publish_date", ""))
+    return Reference(
+        title=rec.get("title", ""), authors=authors,
+        year=ym.group(0) if ym else "", publisher=publisher, isbn=isbn, raw=rec,
+    )
+
+
+def fetch_googlebooks(isbn, session=None):
+    """Look a book up on the Google Books API by ISBN (no key for light use)."""
+    sess = session or requests.Session()
+    try:
+        r = sess.get(GOOGLEBOOKS_API, params={"q": f"isbn:{isbn}"},
+                     headers={"User-Agent": "check_bib/2.0"}, timeout=30)
+    except requests.RequestException:
+        return None
+    if r.status_code != 200:
+        return None
+    items = r.json().get("items", [])
+    if not items:
+        return None
+    vi = items[0].get("volumeInfo", {})
+    authors = [_split_name(a) for a in vi.get("authors", [])]
+    ym = re.search(r"\d{4}", vi.get("publishedDate", ""))
+    return Reference(
+        title=vi.get("title", ""), authors=authors,
+        year=ym.group(0) if ym else "", publisher=vi.get("publisher", ""),
+        isbn=isbn, raw=vi,
+    )
+
+
+def _best_isbn(isbns) -> str:
+    """Pick a preferred ISBN from a list, favouring ISBN-13."""
+    cleaned = [c for c in (clean_isbn(x) for x in isbns) if c]
+    for c in cleaned:
+        if len(c) == 13:
+            return c
+    return cleaned[0] if cleaned else ""
+
+
+def search_openlibrary_books(title, authors, session=None, limit=5):
+    """Search Open Library by title+author. Returns candidate References,
+    each carrying the catalog's ISBN so it can be recovered."""
+    sess = session or requests.Session()
+    params = {"title": title, "limit": limit}
+    if authors:
+        params["author"] = " ".join(f or g for f, g in authors)
+    try:
+        r = sess.get("https://openlibrary.org/search.json", params=params,
+                     headers={"User-Agent": "check_bib/2.0"}, timeout=30)
+    except requests.RequestException:
+        return []
+    if r.status_code != 200:
+        return []
+    out = []
+    for d in r.json().get("docs", [])[:limit]:
+        pubs = d.get("publisher", [])
+        out.append(Reference(
+            title=d.get("title", ""),
+            authors=[_split_name(n) for n in d.get("author_name", [])],
+            year=str(d.get("first_publish_year", "") or ""),
+            publisher=pubs[0] if pubs else "",
+            isbn=_best_isbn(d.get("isbn", [])), raw=d,
+        ))
+    return out
+
+
+def search_googlebooks_books(title, authors, session=None, limit=5):
+    """Search Google Books by title+author. Returns candidate References."""
+    sess = session or requests.Session()
+    q = f"intitle:{title}"
+    if authors:
+        q += " " + " ".join(f"inauthor:{f}" for f, _ in authors if f)
+    try:
+        r = sess.get(GOOGLEBOOKS_API, params={"q": q, "maxResults": limit},
+                     headers={"User-Agent": "check_bib/2.0"}, timeout=30)
+    except requests.RequestException:
+        return []
+    if r.status_code != 200:
+        return []
+    out = []
+    for it in r.json().get("items", [])[:limit]:
+        vi = it.get("volumeInfo", {})
+        ym = re.search(r"\d{4}", vi.get("publishedDate", ""))
+        ids = [x.get("identifier", "") for x in vi.get("industryIdentifiers", [])]
+        out.append(Reference(
+            title=vi.get("title", ""),
+            authors=[_split_name(a) for a in vi.get("authors", [])],
+            year=ym.group(0) if ym else "", publisher=vi.get("publisher", ""),
+            isbn=_best_isbn(ids), raw=vi,
+        ))
+    return out
+
+
+def search_book(title, authors, session=None):
+    """Title+author book search. Open Library first; also consult Google Books
+    if Open Library returns nothing OR its matches carry no ISBN (Open Library
+    search records often omit the ISBN, while Google Books usually has it)."""
+    cands = search_openlibrary_books(title, authors, session=session)
+    if not cands or not any(c.isbn for c in cands):
+        cands = cands + search_googlebooks_books(title, authors, session=session)
+    return cands
+
+
+def fetch_book_by_isbn(isbn, session=None):
+    """Try Open Library, then Google Books. Returns (Reference, source_name)."""
+    ref = fetch_openlibrary(isbn, session)
+    if ref and ref.title:
+        return ref, "Open Library"
+    ref = fetch_googlebooks(isbn, session)
+    if ref and ref.title:
+        return ref, "Google Books"
+    return None, ""
 
 
 # --------------------------------------------------------------------------
@@ -557,9 +741,9 @@ def compare(local, ref, check_year=True, suggest=False):
 # 5. Writing a discovered DOI back into the .bib text
 # --------------------------------------------------------------------------
 
-def insert_doi(text, key, doi):
-    """Insert a `doi = {...},` line right after the entry's opening line,
-    matching the indentation of the following field. Preserves everything
+def insert_field(text, key, field_name, value):
+    """Insert a `<field_name> = {...},` line right after the entry's opening
+    line, matching the indentation of the following field. Preserves everything
     else in the file verbatim. Returns (new_text, inserted?)."""
     m = re.search(rf"(@\w+\s*\{{\s*{re.escape(key)}\s*,[ \t]*\r?\n)", text)
     if not m:
@@ -567,8 +751,12 @@ def insert_doi(text, key, doi):
     after = text[m.end():]
     im = re.match(r"([ \t]+)\S", after)
     indent = im.group(1) if im else "  "
-    line = f"{indent}doi = {{{doi}}},\n"
+    line = f"{indent}{field_name} = {{{value}}},\n"
     return text[:m.end()] + line + text[m.end():], True
+
+
+def insert_doi(text, key, doi):
+    return insert_field(text, key, "doi", doi)
 
 
 # --------------------------------------------------------------------------
@@ -686,6 +874,84 @@ def handle_missing_doi(local, args, session):
     return "uncertain", []
 
 
+def handle_isbn(local, isbn, args, session):
+    """Look a (no-DOI) book up by ISBN via Open Library / Google Books.
+    Falls back to the Crossref title search if the ISBN isn't found."""
+    ref, source = fetch_book_by_isbn(isbn, session=session)
+    time.sleep(args.delay)
+    if ref is None:
+        print(f"[{local.key}] ISBN {isbn} not found in Open Library or "
+              f"Google Books -- trying a title search")
+        return handle_missing_doi(local, args, session)
+
+    problems = compare(local, ref, suggest=args.suggest)
+    # For a book looked up by ISBN, the publisher is the headline datum, so
+    # surface it whenever the entry lacks one (regardless of --suggest).
+    if not local.publisher and ref.publisher:
+        problems.append(f"missing 'publisher': source has '{ref.publisher}'")
+    report(local.key, problems, ok_msg=f"OK (matches {source}, ISBN {isbn})")
+    return "checked", []
+
+
+# Entry types treated as books when they have no DOI/ISBN: these resolve far
+# better against a book catalog (Open Library / Google Books) than Crossref.
+BOOK_TYPES = {"book", "inbook", "incollection", "proceedings", "booklet", "manual"}
+
+
+def handle_missing_book(local, args, session):
+    """No DOI, no ISBN, book-like type -> search a book catalog by title+author
+    to recover the ISBN. Books are REPORTED for confirmation (not auto-trusted
+    like the article path), matched on title+author, and not failed on a year
+    gap, because editions/reprints legitimately differ. Falls back to the
+    Crossref title search if the catalogs turn up nothing."""
+    if not local.title:
+        print(f"[{local.key}] SKIPPED -- no DOI/ISBN and no title to search on")
+        return "skipped", []
+
+    cands = search_book(local.title, local.authors, session=session)
+    time.sleep(args.delay)
+    if not cands:
+        print(f"[{local.key}] no DOI/ISBN -- not found in book catalogs, "
+              f"trying Crossref")
+        return handle_missing_doi(local, args, session)
+
+    best, score = best_candidate(local, cands)
+    # If the top title match carries no ISBN, prefer an equally-good candidate
+    # (e.g. from Google Books) that does, so the ISBN can be reported/recovered.
+    if best and not best.isbn:
+        for c in cands:
+            if (c.isbn and title_score(local.title, c.title) >= TITLE_ACCEPT
+                    and author_family_overlap(local, c)):
+                best, score = c, title_score(local.title, c.title)
+                break
+
+    if best and score >= TITLE_ACCEPT and author_family_overlap(local, best):
+        if best.isbn:
+            print(f"[{local.key}] no DOI/ISBN -> book catalog match, "
+                  f"ISBN {best.isbn} [title {score:.2f}] -- please verify the edition")
+        else:
+            print(f"[{local.key}] no DOI/ISBN -> book catalog match, but no ISBN "
+                  f"in the record [title {score:.2f}] -- please verify the edition")
+        # Lenient: check author list only; the title already matched by score,
+        # and the year may legitimately differ by edition.
+        problems = authors_match(local.authors, best.authors)
+        if not local.publisher and best.publisher:
+            problems.append(f"missing 'publisher': catalog has '{best.publisher}'")
+        report(local.key, problems, ok_msg="title/author match the catalog record")
+        extras = [("isbn", local.key, best.isbn)] if best.isbn else []
+        return "found", extras
+
+    if best and score >= 0.6:
+        print(f"[{local.key}] no DOI/ISBN -- best book candidate uncertain "
+              f"(title {score:.2f}), verify manually:")
+        for c in cands[:3]:
+            print(f"        {c.isbn or '(no isbn)'}  {c.title}")
+        return "uncertain", []
+
+    print(f"[{local.key}] no DOI/ISBN -- no confident book match found")
+    return "uncertain", []
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Check .bib entries against Crossref / arXiv.")
     ap.add_argument("bibfile")
@@ -693,7 +959,7 @@ def main(argv=None):
     ap.add_argument("--delay", type=float, default=0.5,
                     help="seconds between lookups (default 0.5)")
     ap.add_argument("--out", metavar="FILE",
-                    help="write a copy of the .bib with discovered DOIs added")
+                    help="write a copy of the .bib with recovered DOIs/ISBNs added")
     ap.add_argument("--suggest", action="store_true",
                     help="also suggest optional fields (volume/issue/pages) the "
                          "online record has but the entry omits")
@@ -704,15 +970,20 @@ def main(argv=None):
 
     session = requests.Session()
     counts = {"checked": 0, "found": 0, "uncertain": 0, "skipped": 0}
-    discovered = {}     # key -> doi to write back
+    discovered = {}     # key -> (field_name, value) to write back
     published = []      # (key, doi) preprints found to be published
 
     for local in refs:
         arxiv_id = detect_arxiv_id(local)
+        isbn = clean_isbn(local.raw.get("isbn", ""))
         if arxiv_id:
             status, extras = handle_arxiv(local, args, session, arxiv_id)
         elif local.doi:
             status, extras = handle_normal_doi(local, args, session)
+        elif isbn:
+            status, extras = handle_isbn(local, isbn, args, session)
+        elif local.entrytype in BOOK_TYPES:
+            status, extras = handle_missing_book(local, args, session)
         else:
             status, extras = handle_missing_doi(local, args, session)
 
@@ -726,13 +997,18 @@ def main(argv=None):
 
         counts[status] = counts.get(status, 0) + 1
         for extra in extras:
-            if extra[0] == "doi":
-                discovered[extra[1]] = extra[2]
+            if extra[0] in ("doi", "isbn"):
+                discovered[extra[1]] = (extra[0], extra[2])
             elif extra[0] == "published":
                 published.append((extra[1], extra[2]))
 
-    print(f"\nDone: {counts.get('checked',0)} checked, "
-          f"{counts.get('found',0)} DOI found, "
+    # The Done line partitions entries by lookup outcome. "looked up" merges
+    # 'checked' and 'found' (both were successfully resolved against a source);
+    # they are not reported as a separate "recovered" number because that would
+    # invite confusion with the write-back count below, which is a DIFFERENT
+    # axis (an entry can be looked up AND recover a writable identifier).
+    looked_up = counts.get('checked', 0) + counts.get('found', 0)
+    print(f"\nDone: {looked_up} looked up, "
           f"{counts.get('uncertain',0)} unresolved, "
           f"{counts.get('skipped',0)} skipped.")
 
@@ -745,16 +1021,16 @@ def main(argv=None):
         with open(args.bibfile, encoding="utf-8") as fh:
             text = fh.read()
         added = 0
-        for key, doi in discovered.items():
-            text, ok = insert_doi(text, key, doi)
+        for key, (field_name, value) in discovered.items():
+            text, ok = insert_field(text, key, field_name, value)
             added += int(ok)
         with open(args.out, "w", encoding="utf-8") as fh:
             fh.write(text)
-        print(f"\nWrote {args.out} with {added} DOI(s) added "
+        print(f"\nWrote {args.out} with {added} identifier(s) added "
               f"(original file untouched).")
     elif discovered:
-        print(f"\n{len(discovered)} DOI(s) discovered. "
-              f"Re-run with --out FILE to write them into a copy of the .bib.")
+        print(f"\n{len(discovered)} identifier(s) recovered (doi/isbn) -- "
+              f"re-run with --out FILE to write them into a copy of the .bib.")
 
 
 # --------------------------------------------------------------------------
