@@ -782,7 +782,12 @@ def handle_normal_doi(local, args, session):
     if ref is None:
         print(f"[{local.key}] SKIPPED -- DOI '{local.doi}' not found on Crossref")
         return "skipped", []
-    report(local.key, compare(local, ref, suggest=args.suggest))
+    if args.concise:
+        problems = compare(local, ref, suggest=args.suggest)
+        if len(problems) > 0:
+            report(local.key, problems)
+    else:
+        report(local.key, compare(local, ref, suggest=args.suggest))
     return "checked", []
 
 
@@ -804,7 +809,9 @@ def handle_arxiv(local, args, session, arxiv_id):
 
     # arXiv preprints predate publication, so don't flag the year.
     problems = compare(local, rec.reference, check_year=False, suggest=args.suggest)
-    report(local.key, problems, ok_msg=f"OK (matches arXiv:{arxiv_id})")
+    
+    if not args.concise or len(problems) > 0:
+        report(local.key, problems, ok_msg=f"OK (matches arXiv:{arxiv_id})")
 
     # --- publication status -------------------------------------------------
     pub_doi = rec.published_doi
@@ -827,19 +834,22 @@ def handle_arxiv(local, args, session, arxiv_id):
                     f"in {j} ({best.year}) [title match {score:.2f}]")
 
     if note:
+        if args.concise and len(problems) == 0:
+            report(local.key, problems, ok_msg=f"OK (matches arXiv:{arxiv_id})")
         print(f"    * publication status: {note}")
         # If we found a real published DOI, check the entry against it too.
         if pub_doi and not is_arxiv_doi(pub_doi):
             pub_ref = fetch_crossref(pub_doi, mailto=args.mailto, session=session)
             time.sleep(args.delay)
-            if pub_ref:
-                pubs = compare(local, pub_ref, suggest=args.suggest)
-                if pubs:
-                    print(f"    * vs published version ({pub_doi}):")
-                    for p in pubs:
-                        print(f"        - {p}")
-                else:
-                    print(f"    * matches the published version ({pub_doi})")
+            # This only adds verbose output with neglegible value
+            # if pub_ref:
+            #     pubs = compare(local, pub_ref, suggest=args.suggest)
+            #     if pubs and not args.concise:
+            #         print(f"    * vs published version ({pub_doi}):")
+            #         for p in pubs:
+            #             print(f"        - {p}")
+            #     else:
+            #         print(f"    * matches the published version ({pub_doi})")
         extras.append(("published", local.key, pub_doi))
     else:
         print("    * publication status: no published version found (still a preprint)")
@@ -859,8 +869,9 @@ def handle_missing_doi(local, args, session):
     if best and score >= TITLE_ACCEPT and author_family_overlap(local, best):
         print(f"[{local.key}] no DOI in entry -> found {best.doi} "
               f"[title match {score:.2f}]")
-        report(local.key, compare(local, best, suggest=args.suggest),
-               ok_msg="fields otherwise match the found record")
+        problems = compare(local, best, suggest=args.suggest)
+        if not args.concise or len(problems) > 0:
+            report(local.key, problems, ok_msg="fields otherwise match the found record")
         return "found", [("doi", local.key, best.doi)]
 
     if best and score >= 0.6:
@@ -889,7 +900,8 @@ def handle_isbn(local, isbn, args, session):
     # surface it whenever the entry lacks one (regardless of --suggest).
     if not local.publisher and ref.publisher:
         problems.append(f"missing 'publisher': source has '{ref.publisher}'")
-    report(local.key, problems, ok_msg=f"OK (matches {source}, ISBN {isbn})")
+    if not args.concise or len(problems) > 0:
+        report(local.key, problems, ok_msg=f"OK (matches {source}, ISBN {isbn})")
     return "checked", []
 
 
@@ -937,7 +949,8 @@ def handle_missing_book(local, args, session):
         problems = authors_match(local.authors, best.authors)
         if not local.publisher and best.publisher:
             problems.append(f"missing 'publisher': catalog has '{best.publisher}'")
-        report(local.key, problems, ok_msg="title/author match the catalog record")
+        if not args.concise or len(problems) > 0:
+            report(local.key, problems, ok_msg="title/author match the catalog record")
         extras = [("isbn", local.key, best.isbn)] if best.isbn else []
         return "found", extras
 
@@ -963,6 +976,8 @@ def main(argv=None):
     ap.add_argument("--suggest", action="store_true",
                     help="also suggest optional fields (volume/issue/pages) the "
                          "online record has but the entry omits")
+    ap.add_argument("--concise", action="store_true",
+                help="only display entries where action may be required")
     args = ap.parse_args(argv)
 
     refs = parse_bib(args.bibfile)
@@ -976,10 +991,10 @@ def main(argv=None):
     for local in refs:
         arxiv_id = detect_arxiv_id(local)
         isbn = clean_isbn(local.raw.get("isbn", ""))
-        if arxiv_id:
-            status, extras = handle_arxiv(local, args, session, arxiv_id)
-        elif local.doi:
+        if local.doi and not is_arxiv_doi(local.doi):
             status, extras = handle_normal_doi(local, args, session)
+        elif arxiv_id:
+            status, extras = handle_arxiv(local, args, session, arxiv_id)
         elif isbn:
             status, extras = handle_isbn(local, isbn, args, session)
         elif local.entrytype in BOOK_TYPES:
@@ -992,6 +1007,8 @@ def main(argv=None):
         # the entry was skipped.
         miss = missing_required_fields(local)
         if miss:
+            if args.concise and len(extras) == 0:
+                report(local.key, [])
             print(f"    * incomplete @{local.entrytype}: missing required "
                   f"field(s): {', '.join(miss)}")
 
