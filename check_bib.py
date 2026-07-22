@@ -912,8 +912,9 @@ def handle_isbn(local, isbn, args, session):
     problems = compare(local, ref, suggest=args.suggest)
     # For a book looked up by ISBN, the publisher is the headline datum, so
     # surface it whenever the entry lacks one (regardless of --suggest).
-    if not local.publisher and ref.publisher:
-        problems.append(f"missing 'publisher': source has '{ref.publisher}'")
+    # commented out, since this is catched by "miss" regardless
+    # if not local.publisher and ref.publisher:
+    #     problems.append(f"missing 'publisher': source has '{ref.publisher}'")
     if len(problems) > 0:
         extras.append(("problems", problems))
     if not args.concise or len(problems) > 0:
