@@ -48,7 +48,7 @@ It has the following (optional) command line parameters
 
 ## Caveats
 The comparison has some caveats:
-1. Authors are currently only compared with lastname and the initial of the first name: `P\"uschel, Johannes` instead of `P\"uschel, Jonas` would hence not be caught (`Püschl, Jonas` however would). Umlaute and other special characters are normalized (e.g. `ü -> u`) in the comparison. Also, middle names are truncated in the comparison.
+1. Authors are currently only compared with lastname and the initial of the first name: `P\"uschel, Johannes` instead of `P\"uschel, Jonas` would hence not be caught (`P\"uschl, Jonas` however would). Umlaute and other special characters are normalized (e.g. `ü -> u`) in the comparison. Also, middle names are truncated in the comparison.
 2. The `year` field is truly disambiguous. Crossref gives different dates for `published`, `published-online`, `published-print` and `issued`. The script accepts every year that appears in any of those fields.
 3. There are no consistency checks between entries, i.e. if all entries use full or abbreviated journal titles or if all entries use the same author format. 
 
