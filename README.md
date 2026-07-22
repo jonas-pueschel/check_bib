@@ -1,5 +1,5 @@
 # check_bib.py 
-Written with help of Claude Opus 4.8. Verify the fields of `.bib` entries against authoritative online, 
+Written with help of Claude Opus 4.8. Verify the fields of `.bib` entries against authoritative online 
 sources, and fill in / flag missing information.
 
 For each entry the script does whichever of these applies:
